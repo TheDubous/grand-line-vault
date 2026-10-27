@@ -1,3 +1,1 @@
-Grand Line Vault 1.1.2 — card confirmation popup over live camera
-Released: 2026-10-27
-No database schema changes required.
+Grand Line Vault 1.1.3 — Single-step scanning + safer shared cloud sync + Pastel theme

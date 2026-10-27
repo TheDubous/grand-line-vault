@@ -1,33 +1,52 @@
-> **v1.1.2:** automatic detection now opens a card confirmation popup, with Yes/No and an in-popup box/quantity form. See [POPUP-UPDATE.md](POPUP-UPDATE.md).
+# Grand Line Vault 1.1.3 — Fast scanner + safer cloud sync
 
-# Grand Line Vault v1.1.2 — Shared with Friends
+One Piece TCG collection manager for GitHub Pages and Supabase. **This is an update for your existing app, not a new database or migration.** The `grand-line-vault-v1` browser data key and the shared `shared_vault` Supabase document remain unchanged.
 
-**Use this package if you want ONE collection for you and a small circle of approved friends.** It replaces the initial v1.0.0 cloud model of one vault per user. See `START-HERE.md` before uploading to GitHub.
+## What's new
 
-## Features
+- One-step scan: camera or captured photo → **one dialog** with card image, name, ID, quantity and box → **Add & next card**.
+- Re-take / wrong code available in the same dialog under *Wrong ID, artwork or name?*.
+- A softer pastel interface (baby pink, warm beige, baby blue).
+- An updated English One Piece card catalog (new maintained `optcg-data-limitless` dataset) with fallback to the previous catalog and fallback images. Card art requires an external image host and cannot be guaranteed for every printing. The scanner remains OCR-based, not full artwork recognition.
+- A live **cloud sync indicator** showing local-only, saving, cloud-synced, or not synced.
+- A **Check cloud counts / reconcile** action on the Cloud sync screen showing actual remote numbers (when signed in), plus local numbers.
+- Synchronization improvements: every foreground return and once per minute while not scanning, check Supabase; pull cloud updates if local data have not changed; upload only if cloud is unchanged; raise a conflict when both changed. Does not silently delete either side's edits.
+- Detailed confirmation before deliberately replacing the shared cloud document.
 
-- NEW: Hands-free automatic live camera OCR with a rear/front camera switch. Scan frames in the browser, confirm repeat detections, and save to a numbered box. No photo file needed. Camera stays open only while scanning; Stop or leave the page to close it.
-- Manual Capture once and photo import remain as fallbacks; corrections if uncertain.
-- Card catalog with English set data, individual cost/trait/counter/power/text search and saved filters.
-- Numbered storage boxes, collection quantities, CSV imports and JSON backups.
-- Virtual deck plans, OPTCGSim imports/exports, deck JSON, optional reservations with warnings.
-- NEW: One shared cloud vault with RLS-protected allowlist of emails. Each friend signs in with their own email to access the same collection and decks.
+## Before updating: important if devices disagree
 
-## Security model and limitations
+1. **Export a JSON backup on EVERY device with distinct data** — the Home Screen iPhone app, Safari, and desktop browser. Keep separate names, e.g. `iphone-homescreen.json`, `iphone-safari.json`, `computer.json`.
+2. On the Supabase dashboard, do not delete any data/tables.
+3. Note that saving local cards while not signed in does **not** sync them to friends.
+4. A prior device may have a different local collection. On connection the app will ask which collection to use. **Do not click “Replace shared vault with local”** unless you intend to overwrite everyone's cloud collection. Download local backup and choose cloud only when you're happy that unique local changes are saved separately.
+5. If each backup contains distinct cards, they should be examined and merged deliberately to avoid either losing cards or double-counting them. This version does not automatically merge conflicting quantities.
 
-GitHub Pages publishes the app code as a public web site; **inventory and decks are not stored in the repo**. Supabase `shared_vault` is the persistent collection; `vault_members` is an allowlist editable by the Supabase administrator. RLS policies protect the database at the server even when the app's public publishable key is known. Friends should never be made Supabase *project team members* just to gain app access. Setup of a custom SMTP service is needed for sending login emails to ordinary friends.
+## Deploy to GitHub
 
-The app also caches collection data in browser localStorage on signed-in devices, so choose trusted devices. It is NOT designed to protect the local cache on a shared computer, and revoking cloud permission cannot remotely erase downloaded copies. Concurrent edits to the JSON cloud snapshot are detected but not merged; refresh and reconcile after conflicts.
+1. Download and extract the ZIP.
+2. Open your [repository](https://github.com/TheDubous/grand-line-vault) on the `main` branch.
+3. In GitHub upload the **contents** of this folder into the repository root. Replace existing matching files. Keep `index.html`, `app.js` and `styles.css` at the root.
+4. Commit and check **Actions / Pages** for successful publication.
+5. Visit your existing [website](https://thedubous.github.io/grand-line-vault/), checking the sidebar reads **Version 1.1.3**.
+6. On iPhone, first open the website in Safari and check version 1.1.3. Your Home Screen app may be cached separately. Avoid clearing browser site data without first confirming cloud sync and exporting JSON backups. If needed add a fresh Home Screen web app after verifying the original collection exists in Supabase.
 
-Exact alternate artwork photo matching, comprehensive banned-card checks and automated real-world camera accuracy testing are not available yet. Fan-made project not affiliated with Bandai. Base English card catalog: https://github.com/michalkiral/optcg-data.
+No new SQL is required. Keep your existing Supabase URL, **publishable** key and shared-vault member list. Never publish a Supabase secret key.
 
-## Update an existing GitHub Pages installation
+## Verify cloud synchronization
 
-1. **Back up** the existing inventory from your app (Backup → download JSON).
-2. Keep the same repository (`TheDubous/grand-line-vault`) and the same Supabase project. **Do not rerun SQL or create a new database.**
-3. Replace the existing repository's root `app.js`, `styles.css`, `index.html`, and other project files with this release. Do NOT replace them by uploading a ZIP as one file, or nest them inside an extra folder.
-4. Wait for GitHub Pages to publish, then hard-refresh on the phone or close and reopen the Home Screen app.
-5. Open **Scan cards** → Start rear camera → hold a card steady until a repeated OCR match appears. Confirm it and save.
-6. If auto recognition struggles, move closer, use rear camera/strong light, uncover the printed ID at the bottom and use the manual **Capture once** fallback.
+1. Open **Cloud sync** and sign in.
+2. Tap **Check cloud counts / reconcile**.
+3. Inspect both *Local* and *Cloud* counts and the cloud revision number.
+4. Ensure status says **Cloud synced** or **Shared vault loaded** before using another device.
+5. Open the app on a second device. Bring it to the foreground or use **Refresh from cloud**. Compare counts.
+6. If differences are found, export local backups and reconcile them explicitly. A warning is safer than silent data loss.
 
-Your cloud data, decks, and filter presets remain stored in Supabase; the localStorage key and database schema are unchanged. This update does not implement automatic alternate-art recognition, because printings can share IDs.
+### Independent read-only Supabase check
+
+Open the Supabase **SQL Editor** and execute `DIAGNOSE-CLOUD-READ-ONLY.sql`. The query only reads `public.shared_vault`; it does not change anything.
+
+## Testing and limits
+
+Passed local Node tests: existing inventory/deck compatibility; scanner ID parsing and frame cropping; single-step dialog fields; cloud pull/upload and two-sided conflict protection; saved filters, CSV import, reservations, and deck exports.
+
+**Not tested on your actual iPhone or Supabase project.** This environment blocks browser-based network testing. Camera OCR accuracy and the availability of third-party images still need a real-device check. Cloud updates are **not** real-time; foreground / periodic checks and revision-protected saves are used.

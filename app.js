@@ -1,11 +1,12 @@
-/* Grand Line Vault v1.1.2 — One Piece TCG collection + deck planner.
+/* Grand Line Vault v1.1.3 — One Piece TCG collection + deck planner.
    Local-first data with optional user-owned Supabase cloud sync. */
 (() => {
   'use strict';
 
   const KEY = 'grand-line-vault-v1';
-  const SOURCE = 'https://cdn.jsdelivr.net/gh/michalkiral/optcg-data@main/data/index/cards_by_id.json';
-  const SOURCE_BACKUP = 'https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json';
+  const SOURCE = 'https://cdn.jsdelivr.net/gh/michalkiral/optcg-data-limitless@main/data/index/cards_by_id.json';
+  const SOURCE_BACKUP = 'https://cdn.jsdelivr.net/gh/michalkiral/optcg-data@main/data/index/cards_by_id.json';
+  const SOURCE_FALLBACK = 'https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json';
   const IMG_BASE = 'https://en.onepiece-cardgame.com/images/cardlist/card/';
   const app = document.querySelector('#app');
   const modalLayer = document.querySelector('#modalLayer');
@@ -105,34 +106,61 @@
     try { const raw=localStorage.getItem(KEY); return raw ? normalizeData(JSON.parse(raw)) : initialData(); }
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'unsorted',lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:''};
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'box-1',lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:''};
   const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
-  const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null};
+  const CLOUD_ANCHOR_KEY = 'grand-line-vault-cloud-anchor-v1';
+  const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null,anchor:null,remotePending:null,pending:false,diagnostic:'Not checked',lastSuccess:null};
+  // An anchor records the last successfully synced document on THIS device.
+  // It allows us to distinguish untouched cached data from offline edits, and
+  // remote edits from local edits, without silently discarding anything.
+  function cloudIdentity(){return `${sync.config?.url||''}|${sync.user?.id||''}`;}
+  function getCloudAnchor(){try{const a=JSON.parse(localStorage.getItem(CLOUD_ANCHOR_KEY)||'null');return a?.identity===cloudIdentity()?a:null;}catch{return null;}}
+  function writeCloudAnchor(doc,revision){
+    sync.anchor=JSON.parse(JSON.stringify(doc));sync.revision=Number(revision);sync.lastSuccess=new Date();
+    try{localStorage.setItem(CLOUD_ANCHOR_KEY,JSON.stringify({identity:cloudIdentity(),document:sync.anchor,revision:sync.revision}));}
+    catch(err){console.warn('Cloud anchor could not be saved',err);}
+    sync.pending=false;updateCloudBadge();
+  }
+  function sameData(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+  function isDefaultCollection(d){
+    const v=initialData();
+    return !d.entries.length&&!d.decks.length&&!d.presets.length&&sameData(d.locations,v.locations);
+  }
+  function showSyncAlert(message){syncStatus(message);toast(message,true);updateCloudBadge();}
+  function updateCloudBadge(){
+    const el=document.querySelector('#globalCloudStatus');if(!el)return;
+    const label=sync.ready?(sync.busy?'Saving to cloud…':'Cloud synced · r'+sync.revision):(sync.user?'Cloud not synced':'Local only');
+    el.textContent=label;el.dataset.state=sync.ready?'synced':sync.user?'warning':'local';
+    el.title=sync.lastStatus;
+  }
+  
   const isEmptyCollection = data => !data.entries.length && !data.decks.length && !(data.presets||[]).length;
-  function syncStatus(message) {sync.lastStatus=message;const el=document.querySelector('#cloudState');if(el)el.textContent=message;}
+  function syncStatus(message) {sync.lastStatus=message;const el=document.querySelector('#cloudState');if(el)el.textContent=message;updateCloudBadge();}
   function scheduleCloudSave(){
-    if(!sync.ready||!sync.user)return;
-    clearTimeout(sync.timer);sync.timer=setTimeout(()=>sendCloudSave(),1200);
-    syncStatus('Changes saved locally · cloud sync pending');
+    if(!sync.ready||!sync.user){sync.pending=true;syncStatus('Saved on this device only · cloud NOT updated. Open Cloud sync.');return;}
+    sync.pending=true;clearTimeout(sync.timer);sync.timer=setTimeout(()=>sendCloudSave(),1000);
+    syncStatus('Saved locally · uploading to cloud…');
   }
   async function sendCloudSave(){
     if(!sync.ready||!sync.user||sync.busy)return;
-    sync.busy=true;
+    sync.busy=true;updateCloudBadge();
     const payload=JSON.parse(JSON.stringify(state.data));
     const expected=sync.revision;
+    let success=false;
     try{
       const {data,error}=await sync.client.rpc('save_shared_vault',{p_document:payload,p_expected_revision:expected});
       if(error)throw error;
-      sync.revision=Number(data);
-      syncStatus('Shared vault synced · revision '+sync.revision);
-      // Changes made during the request must also be written.
-      if(JSON.stringify(state.data)!==JSON.stringify(payload))scheduleCloudSave();
+      writeCloudAnchor(payload,Number(data));
+      success=true;syncStatus('Shared vault synced · revision '+sync.revision);
     } catch(err){
-      sync.ready=false;
-      syncStatus('Sync paused: '+(err.message||'conflict')+' · local edits are safe');
-      toast('Cloud sync paused. Open Cloud settings to resolve it. Your local changes remain saved.',true);
-    } finally {sync.busy=false;}
+      sync.ready=false;sync.pending=true;
+      showSyncAlert('Sync stopped: '+(err.message||'conflict')+'. Data is only local until reconciled.');
+    } finally {
+      sync.busy=false;updateCloudBadge();
+      // Edits arriving while an upload was in flight must not be silently lost.
+      if(success&&!sameData(state.data,payload))scheduleCloudSave();
+    }
   }
   function persist() {
     try { localStorage.setItem(KEY, JSON.stringify(state.data));scheduleCloudSave(); return true; }
@@ -172,22 +200,24 @@
   const pageHeading = (label,title,description,button='') => `<div class="headerline"><div><div class="overline">${escapeHtml(label)}</div><h1>${escapeHtml(title)}</h1><p class="subhead">${escapeHtml(description)}</p></div>${button}</div>`;
   const empty = (icon,title,description,button='') => `<div class="empty"><div class="empty-icon">${icon}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p>${button}</div>`;
   const pill = (id) => `<span class="location-pill">${escapeHtml(locationById(id)?.name || 'Unsorted')}</span>`;
-  const miniImg = (id) => `<img class="card-mini" loading="lazy" src="${imageUrl(id)}" alt=""/>`;
+  const miniImg = (id) => `<img class="card-mini" loading="lazy" src="${escapeHtml(catalogCard(id)?.image||imageUrl(id))}" alt=""/>`;
   const cardMeta = card => [card.rarity,card.colors || ''].filter(Boolean).join(' · ') || card.category || 'One Piece TCG';
 
 
   // Camera access requires HTTPS (such as GitHub Pages) or localhost; photo import is the fallback.
   function scanView() {
-    return pageHeading('HANDS-FREE COLLECTION ENTRY','Automatic card scanner','Hold the bottom of an English One Piece TCG card unobstructed inside the guide. The scanner checks live camera frames automatically — you do not need to take a photo.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
+    return pageHeading('FAST CARD ENTRY','Scan your cards','Start the camera once. Hold a card in the frame or tap Capture; confirm its artwork, quantity and box in one popup.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
     `<div class="scanner-layout"><section class="panel scanner-panel">
-      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Your camera appears here</strong><small>Keep your fingers away from the bottom edge. More light, less glare, and sharp focus improve recognition.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">CARD BOTTOM / ID</span></div></div>
-      <div class="scanner-controls"><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Automatic detection ON':'○ Automatic detection OFF'}</button><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start rear camera</button><button class="button btn-outline" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture once</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop camera</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Switch camera</button></div>
-      <label class="photo-import button btn-outline">↥ Take / upload photo<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
-      <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Press Start rear camera. Automatic recognition is ON. You can switch it off or use Capture once.</p>
-      <details class="scan-diagnostics"><summary>Recognition diagnostics (show OCR crop)</summary><p id="scanDiagnostics">No recognition attempted yet.</p><canvas id="scanCropPreview" aria-label="Latest close-up region used for OCR"></canvas><p class="hint">The preview shows the image region actually sent to text recognition. If the card ID is missing from this crop, reposition the card.</p></details>
-      <p class="hint">Live OCR analyzes temporary frames on your device; it does not save or upload camera photos. The camera runs during your scan session and stops when you press Stop, leave this page, or background the app. First-time OCR needs internet access to load Tesseract.</p>
-    </section><section class="panel scanner-result-panel"><div class="scanner-result-top"><h3>Identify and store</h3><span class="location-pill">Saved this session: <strong id="scanSaved">${fmt(scanner.saved)}</strong></span></div><div id="scanResult">${empty('▤','Looking for your first card','Detected cards appear in a confirmation popup over the camera. You can save to a box without scrolling.')}</div></section></div>`;
+      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>The bottom-right card code must be visible and in focus.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">CARD NUMBER</span></div></div>
+      <div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Auto on':'○ Auto off'}</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
+      <label class="photo-import button btn-outline">↥ Use photo instead<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
+      <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Start the camera. Detection will suggest a card automatically, or tap Capture card.</p>
+      <div class="scan-session"><strong>Cards saved in this session: <span id="scanSaved">${fmt(scanner.saved)}</span></strong><span id="scanResult"></span></div>
+      <details class="scan-diagnostics"><summary>Having trouble? Open OCR diagnostics</summary><p id="scanDiagnostics">No recognition attempted yet.</p><canvas id="scanCropPreview" aria-label="Latest close-up used for OCR"></canvas></details>
+      <p class="hint">Frames are analyzed on your device. The popup uses English card catalog images. No camera photo is saved to Supabase.</p>
+    </section></div>`;
   }
+
   const isCardCode = id => /^(?:(?:OP|ST|EB|PRB)\d{1,3}-\d{2,4}|P-\d{2,4})(?:_p\d+)?$/i.test(id);
   function detectPrintedIds(text) {
     const found=[];
@@ -492,12 +522,12 @@
   // below-camera result column. Camera remains open but automatic OCR pauses.
   function scanImageHtml(id, known){
     const src=known?.image||imageUrl(id);
-    return `<div class="scan-popup-art"><img class="scan-confirm-image" id="scanMatchImage" src="${escapeHtml(src)}" alt="Catalog image of ${escapeHtml(known?.name||id||'card')}"/><div class="scan-art-fallback" hidden>Card image unavailable</div></div>`;
+    return `<div class="scan-popup-art"><img class="scan-confirm-image" id="scanMatchImage" data-fallback-src="${escapeHtml(imageUrl(id))}" data-attempt="0" src="${escapeHtml(src)}" alt="Catalog image of ${escapeHtml(known?.name||id||'card')}"/><div class="scan-art-fallback" hidden>Card image unavailable</div></div>`;
   }
   function scanModal(content,step){
     scanner.dialogOpen=true;scanner.autoPaused=true;clearAutoTimer();
     modalLayer.innerHTML=`<div class="modal-overlay scan-modal-overlay" id="modalOverlay"><section class="modal scan-modal" role="dialog" aria-modal="true" aria-label="${step==='confirm'?'Confirm detected card':'Add scanned card'}"><button class="modal-close" type="button" data-action="scan-reject" aria-label="Close card scanner dialog">×</button>${content}</section></div>`;
-    const first=modalLayer.querySelector('[data-action="scan-confirm-yes"],#scanCardId,[data-action="scan-reject"]');
+    const first=modalLayer.querySelector(step==='edit'?'.scan-save-buttons [type="submit"]':'[data-action="scan-reject"]');
     first?.focus({preventScroll:true});
   }
   function resumeScanning({ignoreId='',message='Ready for the next card.'}={}){
@@ -510,30 +540,24 @@
     if(state.view!=='scan')return;
     const id=safeId(detectedId);
     scanner.matchId=id;
-    if(manual||!id){renderScanEditor(id);return;}
-    const known=catalogCard(id);
-    setScanResult(`<p class="scan-status">Card ${escapeHtml(id)} detected. Confirm it in the popup above the camera.</p>`);
-    scanModal(`<div class="scan-popup-eyebrow">CARD DETECTED</div>
-      <h2>Is this your card?</h2>
-      <div class="scan-confirm-hero">${scanImageHtml(id,known)}<div class="scan-confirm-details"><strong class="scan-confirm-name">${escapeHtml(known?.name||'Unknown card')}</strong><span class="scan-confirm-id">${escapeHtml(id)}</span><small>${escapeHtml(known?cardMeta(known):'Card number detected · not found in loaded English catalog')}</small><span class="scan-confirm-owned">${fmt(qtyFor(id))} already owned</span></div></div>
-      <p class="scan-confirm-note">This is the catalog image for the detected ID. Alternate artworks can share a printed ID, so verify the picture before saving.</p>
-      <div class="scan-confirm-buttons"><button type="button" class="button btn-outline" data-action="scan-reject">No, scan again</button><button type="button" class="button btn-primary" data-action="scan-confirm-yes">Yes, this card</button></div>
-      <button type="button" class="scan-edit-link" data-action="scan-edit-id">Wrong ID? Correct it manually</button>`, 'confirm');
+    renderScanEditor(id,manual);
+    setScanResult('');
   }
-  function renderScanEditor(detectedId=''){
+  function renderScanEditor(detectedId='',manual=false){
     const id=safeId(detectedId),known=catalogCard(id),variants=variantOptions(id);
-    const defaultName=known?.name||id;
     scanner.matchId=id;
-    scanModal(`<div class="scan-popup-eyebrow">ADD TO COLLECTION</div><h2>Save scanned card</h2>
+    const pic=scanImageHtml(id,known);
+    const ambiguous=!known || !known.image;
+    scanModal(`<div class="scan-popup-eyebrow">${manual?'MANUAL CARD MATCH':'CARD FOUND'}</div><h2>${manual?'Enter the card number':'Is this your card?'}</h2>
       <form data-form="scan-add" class="scan-add-form">
-      <div class="scan-match-card scan-popup-match">${scanImageHtml(id,known)}<div><strong id="scanMatchName">${escapeHtml(defaultName||'Enter card ID')}</strong><span id="scanMatchMeta">${escapeHtml(known?cardMeta(known):'Enter or correct the printed card ID')}</span><small id="scanOwnedCount">${fmt(qtyFor(id))} copies owned</small></div></div>
-      <div class="form-fields"><label>Printed card ID<input id="scanCardId" class="field" name="cardId" maxlength="40" required spellcheck="false" autocapitalize="characters" placeholder="OP05-015" value="${escapeHtml(id)}" /></label>
-      <label id="scanVariantWrap" ${variants.length>1?'':'hidden'}>Printing / alternate artwork<select class="select" id="scanVariantSelect">${variants.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===id?'selected':''}>${escapeHtml(c.id)} · ${escapeHtml(c.name)}</option>`).join('')}</select></label>
-      <label>Card name (editable if not in catalog)<input class="field" id="scanCardName" name="name" maxlength="150" value="${escapeHtml(defaultName)}" placeholder="Card name" /></label>
-      <div class="scan-fields-two"><label>Copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Storage box<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
-      <label>Optional note / position<input class="field" name="slot" maxlength="100" value="${escapeHtml(scanner.lastSlot)}" placeholder="Optional" /></label></div>
-      <div class="scan-confirm-buttons scan-save-buttons"><button class="button btn-outline" type="button" data-action="scan-reject">Cancel / scan again</button><button class="button btn-primary" type="submit">＋ Save & next card</button></div>
+      <div class="scan-match-card scan-popup-match">${pic}<div><strong id="scanMatchName">${escapeHtml(known?.name||'Card not in catalog')}</strong><span id="scanMatchMeta">${escapeHtml(id||'Unknown ID')}</span><small id="scanOwnedCount">${fmt(qtyFor(id))} already owned</small>${ambiguous?'<small class="scan-art-warning">Catalog picture unavailable. Confirm the ID before saving.</small>':''}</div></div>
+      <div class="scan-fields-two"><label>Copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Box<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
+      <details class="scan-advanced"><summary>Wrong ID, artwork or name? Correct card</summary><div class="form-fields"><label>Printed card ID<input id="scanCardId" class="field" name="cardId" maxlength="40" required spellcheck="false" autocapitalize="characters" placeholder="OP05-015" value="${escapeHtml(id)}" /></label>
+      <label id="scanVariantWrap" ${variants.length>1?'':'hidden'}>Exact printing<select class="select" id="scanVariantSelect">${variants.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===id?'selected':''}>${escapeHtml(c.id)} · ${escapeHtml(c.name)}</option>`).join('')}</select></label>
+      <label>Card name<input class="field" id="scanCardName" name="name" maxlength="150" value="${escapeHtml(known?.name||id)}" placeholder="Card name" /></label><label>Optional note<input class="field" name="slot" maxlength="100" value="${escapeHtml(scanner.lastSlot)}" placeholder="Optional" /></label></div></details>
+      <div class="scan-confirm-buttons scan-save-buttons"><button class="button btn-outline" type="button" data-action="scan-reject">No · scan again</button><button class="button btn-primary" type="submit">✓ Add & next card</button></div>
       </form>`, 'edit');
+    // Hidden detail controls stay in the same FORM for a one-tap positive path.
   }
   function syncScanCard(){
     const input=document.querySelector('#scanCardId');if(!input)return;
@@ -545,7 +569,7 @@
     if(matchName)matchName.textContent=known?.name||id||'Enter card ID';
     if(matchMeta)matchMeta.textContent=known?cardMeta(known):'Check the card number below';
     if(owned)owned.textContent=`${fmt(qtyFor(id))} copies owned`;
-    if(img){img.src=known?.image||imageUrl(id);img.alt='Catalog image of '+(known?.name||id||'card');img.hidden=false;const fallback=img.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=true;}
+    if(img){img.dataset.fallbackSrc=imageUrl(id);img.dataset.attempt='0';img.src=known?.image||imageUrl(id);img.alt='Catalog image of '+(known?.name||id||'card');img.hidden=false;const fallback=img.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=true;}
   }
 
   function dashboardView() {
@@ -877,7 +901,7 @@
   function applySavedPreset(p){state.query=p.query;state.color=p.color;state.set=p.set;state.filters={...p.filters,costs:new Set(p.filters.costs)};state.perPage=48;render();}
   function cloudView(){const configured=Boolean(sync.config);const signedIn=Boolean(sync.user);
     return pageHeading('PRIVATE FRIENDS-ONLY COLLECTION','Shared cloud synchronization','Approved friends use separate email logins but share the same numbered boxes, inventory, filters and deck plans.')+
-      `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p><p class="hint">Inventory always saves locally first. Upload/download choices protect existing collections. Cloud sync requires the shared-vault SQL included in this ZIP. Only admin-approved email addresses can access shared data. Cloud changes on another device may require Refresh from cloud.</p>
+      `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p><p class="hint"><strong>Source of truth: Supabase shared vault.</strong> This browser has a separate local copy. Changes made offline are not visible on other devices until uploaded. Each device checks cloud updates when it becomes active; conflicting changes require a choice and should be backed up first.</p><div class="sync-inspector"><strong>Local:</strong> ${fmt(state.data.entries.reduce((n,e)=>n+e.qty,0))} cards · ${state.data.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${state.data.decks.length} decks<br><strong>Cloud:</strong> ${escapeHtml(sync.diagnostic)}<br><strong>Last saved:</strong> ${escapeHtml(sync.lastSuccess?sync.lastSuccess.toLocaleString():'Not confirmed in this session')}</div>${signedIn?`<button class="button btn-primary" type="button" data-action="cloud-diagnose">Check cloud counts / reconcile</button>`:''}
       <form data-form="cloud-config"><div class="form-fields"><label>Supabase project URL<input class="field" type="url" name="url" placeholder="https://yourproject.supabase.co" value="${escapeHtml(sync.config?.url||'')}" required></label><label>Supabase publishable (anon) key<input class="field" name="key" placeholder="sb_publishable_..." value="${escapeHtml(sync.config?.key||'')}" required></label></div><p class="hint">Never paste a Supabase service_role or secret key into this app.</p><button type="submit" class="button btn-outline">${configured?'Update connection':'Connect Supabase'}</button></form>
       ${configured?`<hr/><form data-form="cloud-login"><label>Email for a magic sign-in link<input class="field" type="email" name="email" required placeholder="you@example.com"></label><div class="actions"><button type="submit" class="button btn-primary">Email me a sign-in link</button>${signedIn?`<button class="button btn-outline" data-action="cloud-refresh" type="button">Refresh from cloud</button><button class="button btn-ghost" data-action="cloud-signout" type="button">Sign out</button>`:''}</div></form>`:''}
       <p class="hint">${signedIn?`Signed in: ${escapeHtml(sync.user.email||'Account')} · `:''}${sync.ready?'Automatic sync enabled.':'Local mode remains available even without a cloud connection.'}</p></section>`;
@@ -887,21 +911,47 @@
     modal(`<h2>Two different collections detected</h2><p class="subhead">Your browser has saved inventory/decks, and your group shared vault has a different saved collection. We will never silently overwrite either.</p><p class="hint">Download a JSON backup first, especially if you made changes on both devices.</p><div class="actions"><button class="button btn-outline" type="button" data-action="export-backup-cloud">Download local backup</button><button class="button btn-primary" type="button" data-action="cloud-choose-remote">Use cloud collection</button><button class="button btn-danger" type="button" data-action="cloud-choose-local">Replace shared vault with local</button></div>`);
     sync.remotePending=remote;
   }
-  async function establishCloud(){
-    if(!sync.client||!sync.user||sync.connecting)return;
-    sync.connecting=true;sync.ready=false;clearTimeout(sync.timer);
+  async function establishCloud({fromButton=false}={}){
+    if(!sync.client||!sync.user||sync.connecting||sync.busy||sync.remotePending)return;
+    if(scanner.dialogOpen)return;
+    sync.connecting=true;clearTimeout(sync.timer);
     try{
       const {data,error}=await sync.client.from('shared_vault').select('document,revision').eq('id','main').maybeSingle();
       if(error)throw error;
-      if(!data)throw new Error('No shared-vault access. Ask the project owner to approve your sign-in email in vault_members, then refresh.');
-      const remote=normalizeData(data.document||{});
-      sync.revision=Number(data.revision);
-      if(isEmptyCollection(state.data)||JSON.stringify(remote)===JSON.stringify(state.data)){
-        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;syncStatus('Shared vault loaded · revision '+sync.revision);if(state.view!=='scan')render();
-      } else {showCloudChoice(remote);syncStatus('Choose which collection to keep');}
-    }catch(err){syncStatus('Cloud connection error: '+(err.message||String(err)));toast('Cloud connection failed. Local cards remain saved.',true);}
-    finally{sync.connecting=false;}
+      if(!data)throw new Error('Not authorized for shared_vault. Check vault_members and sign-in.');
+      const remote=normalizeData(data.document&&Array.isArray(data.document.entries)?data.document:initialData());
+      const revision=Number(data.revision);
+      sync.diagnostic=`${fmt(remote.entries.reduce((n,e)=>n+e.qty,0))} cards · ${remote.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${remote.decks.length} decks · revision ${revision}`;
+      const anchor=getCloudAnchor();
+      const localEqualsRemote=sameData(state.data,remote);
+      const localUnchanged=anchor&&sameData(state.data,anchor.document);
+      const remoteUnchanged=anchor&&sameData(remote,anchor.document);
+      sync.revision=revision;
+      if(localEqualsRemote||localUnchanged||isDefaultCollection(state.data)){
+        // Adopt cloud data only if local data are identical, unchanged since the
+        // last synced revision, or truly untouched defaults. Never silently
+        // discard added boxes or cards.
+        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));
+        writeCloudAnchor(remote,revision);sync.ready=true;
+        syncStatus('Shared vault loaded · revision '+revision);
+        if(state.view!=='scan')render();
+      }else if(remoteUnchanged){
+        // Local offline edits, with cloud unchanged, can be uploaded safely.
+        sync.ready=true;sync.pending=true;
+        syncStatus('Local changes detected; uploading to cloud…');
+        if(state.view!=='scan')render();
+        scheduleCloudSave();
+      }else{
+        // First-time conflicting local copies and simultaneous edits require
+        // an explicit user choice. Local records are NEVER thrown away here.
+        sync.ready=false;sync.pending=true;
+        showCloudChoice(remote);syncStatus('Different local/cloud data: choose safely.');
+        if(fromButton)toast('The collections differ. Back up before choosing.',true);
+      }
+    }catch(err){sync.ready=false;sync.pending=true;showSyncAlert('Cloud check failed: '+(err.message||String(err)));}
+    finally{sync.connecting=false;updateCloudBadge();}
   }
+
   async function connectCloud(){
     if(!sync.config?.url||!sync.config.key)return;
     syncStatus('Loading Supabase client…');
@@ -950,14 +1000,14 @@
     if(action==='export-backup-cloud'){downloadBackup();return;}
     if(action==='cloud-choose-remote'){
       if(!sync.remotePending)return;
-      downloadBackup();state.data=sync.remotePending;sync.remotePending=null;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;closeModal();syncStatus('Using shared collection · revision '+sync.revision);render();toast('Cloud collection loaded. Local JSON backup downloaded.');return;
+      downloadBackup();state.data=sync.remotePending;sync.remotePending=null;localStorage.setItem(KEY,JSON.stringify(state.data));writeCloudAnchor(state.data,sync.revision);sync.ready=true;closeModal();syncStatus('Using shared collection · revision '+sync.revision);render();toast('Cloud collection loaded. Local JSON backup downloaded.');return;
     }
     if(action==='cloud-choose-local'){
       if(!sync.remotePending)return;
-      if(!confirm("REPLACE EVERYONE'S shared vault with your local cards and decks? Other members' changes could be lost. Download a backup first."))return;
+      if(!confirm("WARNING: this will REPLACE the entire shared cloud collection for all friends with data from this device. Other devices' additions may disappear. Have you exported a JSON backup on EVERY affected device?"))return;
       sync.remotePending=null;sync.ready=true;closeModal();sendCloudSave();render();return;
     }
-    if(action==='cloud-refresh'){establishCloud();return;}
+    if(action==='cloud-refresh'||action==='cloud-diagnose'){establishCloud({fromButton:true});return;}
     if(action==='cloud-signout'){sync.client?.auth.signOut();return;}
     if(action==='clear-filters'){
       state.query='';state.set='all';state.color='all';state.perPage=48;
@@ -1130,7 +1180,7 @@
   document.querySelector('#backupBtn').addEventListener('click',downloadBackup);
   document.addEventListener('visibilitychange',()=>{if(document.hidden && scanner.stream){stopCamera();updateScanButtons();setScanStatus('Camera paused. Press Start camera to resume.');}});
   window.addEventListener('pagehide',()=>{stopCamera();if(scanner.worker)scanner.worker.terminate();});
-  document.addEventListener('error',e=>{if(e.target instanceof HTMLImageElement && e.target.matches('.scan-confirm-image')){e.target.hidden=true;const fallback=e.target.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=false;}else if(e.target instanceof HTMLImageElement && e.target.closest('.card-art,.card-cell,.modal-card-heading'))e.target.style.visibility='hidden';},true);
+  document.addEventListener('error',e=>{if(e.target instanceof HTMLImageElement && e.target.matches('.scan-confirm-image')){if(e.target.dataset.attempt==='0'&&e.target.dataset.fallbackSrc&&e.target.src!==e.target.dataset.fallbackSrc){e.target.dataset.attempt='1';e.target.src=e.target.dataset.fallbackSrc;return;}e.target.hidden=true;const fallback=e.target.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=false;}else if(e.target instanceof HTMLImageElement && e.target.closest('.card-art,.card-cell,.modal-card-heading'))e.target.style.visibility='hidden';},true);
 
   function normalizeCatalog(source) {
     const records=Array.isArray(source)?source:Object.entries(source).map(([id,v])=>({...v,id:v?.id||id}));
@@ -1151,7 +1201,7 @@
     const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),20000);
     try{
       let source, lastError;
-      for(const url of [SOURCE,SOURCE_BACKUP]){
+      for(const url of [SOURCE,SOURCE_BACKUP,SOURCE_FALLBACK]){
         try{const response=await fetch(url,{signal:abort.signal,cache:'default'});if(!response.ok)throw new Error(`HTTP ${response.status}`);source=await response.json();break;}
         catch(err){lastError=err;}
       }
@@ -1162,13 +1212,22 @@
       catalogStatus.textContent=`${fmt(cards.length)} English cards available`;catalogStatus.className='source-status ready';
       const byId=new Map(cards.map(c=>[c.id,c]));let modified=false;
       for(const entry of state.data.entries){const match=byId.get(entry.cardId);if(match&&entry.name===entry.cardId){entry.name=match.name;entry.rarity=match.rarity;entry.colors=match.colors;modified=true;}}
-      if(modified)persist();
+      if(modified&&(!sync.config||!sync.user))persist();
     }catch(err){state.catalog=fallbackCards;state.loaded=false;state.catalogError=err.message;
       catalogStatus.textContent='Catalog offline · limited search';catalogStatus.className='source-status offline';
       toast('Full card catalog unavailable. Saved inventory and decks still work.',true);
     }finally{clearTimeout(timeout);if(state.view!=='scan')render();}
   }
-  render();loadCatalog();
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&sync.user&&sync.client&&!sync.connecting&&!sync.busy&&!scanner.dialogOpen)establishCloud();
+  });
+  window.addEventListener('focus',()=>{
+    if(sync.user&&sync.client&&!sync.connecting&&!sync.busy&&!scanner.dialogOpen)establishCloud();
+  });
+  setInterval(()=>{
+    if(sync.user&&sync.client&&!document.hidden&&!sync.connecting&&!sync.busy&&!scanner.dialogOpen&&state.view!=='scan')establishCloud();
+  },60000);
+  render();loadCatalog();updateCloudBadge();
   try {sync.config=JSON.parse(localStorage.getItem(CLOUD_KEY)||'null');if(sync.config?.url&&sync.config?.key)connectCloud();}catch(err){console.warn('Cloud config unreadable',err);}
   // Make the initial catalog panel useful even before network finishes.
   if(state.view==='catalog')paintCatalog();
