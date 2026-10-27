@@ -1,7 +1,7 @@
 {
   "name": "Grand Line Vault \u2014 One Piece TCG Storage",
   "short_name": "Grand Line Vault",
-  "description": "Manage One Piece TCG cards and detect printed IDs automatically from your live phone camera.",
+  "description": "Manage One Piece TCG cards and detect card IDs and confirm cards in a popup from your live phone camera.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

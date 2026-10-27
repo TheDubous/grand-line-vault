@@ -1,4 +1,4 @@
-# Update to v1.1.0 automatic scanner
+# Update to v1.1.2 automatic scanner
 
 If your app is **already working in GitHub Pages and Supabase**, do not repeat the initial installation steps. Download a JSON backup, replace the GitHub repository files with this ZIP contents, and keep the same Supabase database. See `README.md` for precise updating steps.
 

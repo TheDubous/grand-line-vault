@@ -1,4 +1,6 @@
-# Grand Line Vault v1.1.0 — Shared with Friends
+> **v1.1.2:** automatic detection now opens a card confirmation popup, with Yes/No and an in-popup box/quantity form. See [POPUP-UPDATE.md](POPUP-UPDATE.md).
+
+# Grand Line Vault v1.1.2 — Shared with Friends
 
 **Use this package if you want ONE collection for you and a small circle of approved friends.** It replaces the initial v1.0.0 cloud model of one vault per user. See `START-HERE.md` before uploading to GitHub.
 

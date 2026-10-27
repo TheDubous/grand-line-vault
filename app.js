@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.1.0 — One Piece TCG collection + deck planner.
+/* Grand Line Vault v1.1.2 — One Piece TCG collection + deck planner.
    Local-first data with optional user-owned Supabase cloud sync. */
 (() => {
   'use strict';
@@ -105,7 +105,7 @@
     try { const raw=localStorage.getItem(KEY); return raw ? normalizeData(JSON.parse(raw)) : initialData(); }
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'unsorted',lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment'};
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'unsorted',lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:''};
   const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
   const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null};
@@ -184,32 +184,35 @@
       <div class="scanner-controls"><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Automatic detection ON':'○ Automatic detection OFF'}</button><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start rear camera</button><button class="button btn-outline" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture once</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop camera</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Switch camera</button></div>
       <label class="photo-import button btn-outline">↥ Take / upload photo<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
       <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Press Start rear camera. Automatic recognition is ON. You can switch it off or use Capture once.</p>
-      <details class="scan-diagnostics"><summary>Recognition diagnostics</summary><p id="scanDiagnostics">No recognition attempted yet.</p></details>
+      <details class="scan-diagnostics"><summary>Recognition diagnostics (show OCR crop)</summary><p id="scanDiagnostics">No recognition attempted yet.</p><canvas id="scanCropPreview" aria-label="Latest close-up region used for OCR"></canvas><p class="hint">The preview shows the image region actually sent to text recognition. If the card ID is missing from this crop, reposition the card.</p></details>
       <p class="hint">Live OCR analyzes temporary frames on your device; it does not save or upload camera photos. The camera runs during your scan session and stops when you press Stop, leave this page, or background the app. First-time OCR needs internet access to load Tesseract.</p>
-    </section><section class="panel scanner-result-panel"><div class="scanner-result-top"><h3>Identify and store</h3><span class="location-pill">Saved this session: <strong id="scanSaved">${fmt(scanner.saved)}</strong></span></div><div id="scanResult">${empty('▤','Looking for your first card','Start the rear camera, then hold a card still with the bottom ID completely visible.')}</div></section></div>`;
+    </section><section class="panel scanner-result-panel"><div class="scanner-result-top"><h3>Identify and store</h3><span class="location-pill">Saved this session: <strong id="scanSaved">${fmt(scanner.saved)}</strong></span></div><div id="scanResult">${empty('▤','Looking for your first card','Detected cards appear in a confirmation popup over the camera. You can save to a box without scrolling.')}</div></section></div>`;
   }
   const isCardCode = id => /^(?:(?:OP|ST|EB|PRB)\d{1,3}-\d{2,4}|P-\d{2,4})(?:_p\d+)?$/i.test(id);
   function detectPrintedIds(text) {
-    const result=[];
-    const clean=String(text||'').toUpperCase().replace(/[‐‑–—]/g,'-').replace(/\r/g,' ');
-    const normalizeNum=x=>x.replace(/[OQD]/g,'0').replace(/[IL|]/g,'1').replace(/S/g,'5').replace(/B/g,'8');
-    const main=/(?:^|[^A-Z0-9])((?:[O0]P|ST|EB|PRB))\s*[- ]?\s*([0-9OQDILSB]{1,3})\s*[- ]\s*([0-9OQDILSB]{2,4})(?![0-9A-Z])/g;
-    let m;
-    while((m=main.exec(clean))!==null) {
-      const p=m[1].replace(/^0P/,'OP'),set=normalizeNum(m[2]).padStart(2,'0'),number=normalizeNum(m[3]).padStart(3,'0');
-      const id=`${p}${set}-${number}`;if(isCardCode(id)&&!result.includes(id))result.push(id);
+    const found=[];
+    const input=String(text||'').toUpperCase().replace(/[‐‑–—−]/g,'-').replace(/[\r\n]+/g,' ');
+    const normalizeNum=x=>String(x).replace(/[OQD]/g,'0').replace(/[IL|]/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/G/g,'6').replace(/B/g,'8');
+    const add=id=>{if(isCardCode(id)&&!found.includes(id))found.push(id);};
+    // First, prefer ordinary IDs. The digits after the three-digit card number
+    // can be a rarity indicator or DON count recognized as more digits.
+    let match;
+    const standard=/(?:^|[^A-Z0-9])((?:[O0]P|ST|EB|PRB))\s*[- ]?\s*([0-9OQDILSBZG]{1,3})\s*[- ]\s*([0-9OQDILSBZG]{3})/g;
+    while((match=standard.exec(input))!==null){
+      const prefix=match[1].replace(/^0P/,'OP');
+      add(`${prefix}${normalizeNum(match[2]).padStart(2,'0')}-${normalizeNum(match[3])}`);
     }
-    // OCR can drop the hyphen entirely (e.g. OP05015). Restrict to the usual
-    // 2-digit set + 3-digit card format to avoid arbitrary numeric guesses.
-    const compact=/(?:^|[^A-Z0-9])((?:[O0]P|ST|EB|PRB))\s*([0-9OQDILSB]{2})([0-9OQDILSB]{3})(?![0-9A-Z])/g;
-    while((m=compact.exec(clean))!==null) {
-      const p=m[1].replace(/^0P/,'OP');
-      const id=`${p}${normalizeNum(m[2])}-${normalizeNum(m[3])}`;
-      if(isCardCode(id)&&!result.includes(id))result.push(id);
+    const compact=/(?:^|[^A-Z0-9])((?:[O0]P|ST|EB|PRB))\s*([0-9OQDILSBZG]{2})([0-9OQDILSBZG]{3})/g;
+    while((match=compact.exec(input))!==null){
+      add(`${match[1].replace(/^0P/,'OP')}${normalizeNum(match[2])}-${normalizeNum(match[3])}`);
     }
-    const promo=/(?:^|[^A-Z0-9])P\s*-\s*([0-9OQDILSB]{2,4})(?![0-9A-Z])/g;
-    while((m=promo.exec(clean))!==null){const id=`P-${normalizeNum(m[1]).padStart(3,'0')}`;if(!result.includes(id))result.push(id);}
-    return result;
+    const promo=/(?:^|[^A-Z0-9])P\s*-\s*([0-9OQDILSBZG]{2,4})(?![A-Z0-9])/g;
+    while((match=promo.exec(input))!==null)add(`P-${normalizeNum(match[1]).padStart(3,'0')}`);
+    // The tiny O in OP16-113 is occasionally lost at the edge of the OCR crop.
+    // This fallback only triggers for a two-digit numbered set plus 3 digits.
+    const missingO=/(?:^|[^A-Z0-9])P\s*([0-9OQDILSBZG]{2})\s*-\s*([0-9OQDILSBZG]{3})/g;
+    while((match=missingO.exec(input))!==null)add(`OP${normalizeNum(match[1])}-${normalizeNum(match[2])}`);
+    return found;
   }
   function setScanStatus(message) {const el=document.querySelector('#scanStatus');if(el)el.textContent=message;}
   function setScanDiagnostics(message){const el=document.querySelector('#scanDiagnostics');if(el)el.textContent=String(message||'No text recognized').slice(0,450);}
@@ -285,12 +288,29 @@
     canvas.getContext('2d',{willReadFrequently:true}).drawImage(source,0,0,canvas.width,canvas.height);
     return canvas;
   }
+  function visibleCameraCanvas(video,maxEdge=2100){
+    // object-fit:cover means the displayed portrait preview is a CROP of the
+    // intrinsic camera stream (often landscape on iPhones). Analyze that crop,
+    // not the full frame: the printed code is otherwise dramatically smaller.
+    const w=video.videoWidth,h=video.videoHeight;
+    if(!w||!h)throw new Error('Camera not ready.');
+    const rect=video.getBoundingClientRect();
+    const aspect=(rect.width>0&&rect.height>0)?rect.width/rect.height:w/h;
+    let sx=0,sy=0,sw=w,sh=h;
+    if(w/h>aspect){sw=Math.min(w,h*aspect);sx=(w-sw)/2;}
+    else {sh=Math.min(h,w/aspect);sy=(h-sh)/2;}
+    const factor=Math.min(1,maxEdge/Math.max(sw,sh));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(sw*factor));canvas.height=Math.max(1,Math.round(sh*factor));
+    canvas.getContext('2d',{willReadFrequently:true}).drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+    return canvas;
+  }
   async function captureCard(){
     if(scanner.busy||!scanner.stream)return;
     const video=document.querySelector('#scanVideo');
     if(!video||!video.videoWidth){setScanStatus('Camera is still warming up. Try again.');return;}
     clearAutoTimer();scanner.autoPaused=true;scanner.autoIgnoreId='';clearAutoProgress();
-    await recognizeCanvas(scaledCanvas(video,video.videoWidth,video.videoHeight,2000));
+    await recognizeCanvas(visibleCameraCanvas(video,2100));
   }
   async function recognizePhoto(file){
     if(!file||scanner.busy)return;
@@ -342,37 +362,65 @@
     })().catch(err=>{scanner.workerLoading=null;throw err;});
     return scanner.workerLoading;
   }
-  function ocrCrop(source,{left=0,top=.5,width=1,height=.5,scale=1.4}={}){
-    const x=Math.floor(source.width*left),y=Math.floor(source.height*top);
-    const sw=Math.max(1,Math.floor(source.width*width)),sh=Math.max(1,Math.floor(source.height*height));
-    const enlarged=Math.min(scale,2000/sw);
-    const crop=document.createElement('canvas');crop.width=Math.max(1,Math.round(sw*enlarged));crop.height=Math.max(1,Math.round(sh*enlarged));
+  function ocrCrop(source,{left=0,top=.5,width=1,height=.5,scale=3,highContrast=false}={}){
+    const x=Math.max(0,Math.floor(source.width*left)),y=Math.max(0,Math.floor(source.height*top));
+    const sw=Math.max(1,Math.min(source.width-x,Math.floor(source.width*width)));
+    const sh=Math.max(1,Math.min(source.height-y,Math.floor(source.height*height)));
+    const factor=Math.min(scale,2200/sw,1600/sh);
+    const crop=document.createElement('canvas');
+    crop.width=Math.max(1,Math.round(sw*factor));crop.height=Math.max(1,Math.round(sh*factor));
     const ctx=crop.getContext('2d',{willReadFrequently:true});
-    ctx.filter='grayscale(1) contrast(1.9) brightness(1.13)';
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    // Keep grayscale smooth: harsh thresholding can destroy thin 1 or 3 glyphs.
+    ctx.filter=highContrast?'grayscale(1) contrast(2.2) brightness(1.05)':'grayscale(1) contrast(1.55) brightness(1.06)';
     ctx.drawImage(source,x,y,sw,sh,0,0,crop.width,crop.height);
     return crop;
   }
+  function showOcrCrop(canvas, label=''){
+    const el=document.querySelector('#scanCropPreview');
+    if(!el)return;
+    el.width=canvas.width;el.height=canvas.height;
+    el.getContext('2d').drawImage(canvas,0,0);
+    el.setAttribute('aria-label',`OCR crop: ${label}`);
+  }
   function bestCandidate(ids){
-    // Favor catalogued cards, but do not require a network catalog download.
+    // Favor known card IDs; names/artwork must still be manually confirmed.
     return [...ids].sort((a,b)=>Number(Boolean(catalogCard(b)))-Number(Boolean(catalogCard(a))))[0]||'';
   }
   async function recognizeIdFrame(canvas,worker,{quick=false,attempt=0}={}){
-    // Printed card IDs are near the card bottom; avoid processing the busy text
-    // and artwork unless needed. Broad and narrow regions cover framing errors.
-    const strip=ocrCrop(canvas,{left:.07,top:.67,width:.86,height:.30,scale:1.65});
-    const first=await worker.recognize(strip);
-    let text=first.data.text||'';
-    let candidates=detectPrintedIds(text);
-    if(!candidates.length && (!quick || attempt%2===0)){
-      const lower=ocrCrop(canvas,{top:.44,height:.56,scale:1.15});
-      const second=await worker.recognize(lower);
-      text+='\n'+(second.data.text||'');candidates=detectPrintedIds(text);
+    // The printed number sits at bottom-right of the physical card, and the
+    // physical card is positioned inside the portrait preview guide.
+    // Alternate two focus windows because card position varies between users.
+    const regions=[
+      {label:'lower right',left:.51,top:.75,width:.40,height:.15,scale:3.5},
+      {label:'lower right shifted',left:.45,top:.68,width:.48,height:.22,scale:2.8},
+      {label:'bottom right lower',left:.49,top:.81,width:.45,height:.15,scale:3},
+      {label:'whole lower edge',left:.20,top:.66,width:.75,height:.31,scale:2.2}
+    ];
+    const order=quick?(attempt%3===0?[2,0]:attempt%2===0?[1,0]:[0,1]):[0,1,2,3];
+    let text='', candidates=[], lastRegion='';
+    for(const idx of order){
+      const opts=regions[idx];
+      const crop=ocrCrop(canvas,{...opts,highContrast:idx===2});
+      showOcrCrop(crop,opts.label);
+      // 7 = one line, more suitable for card codes than sparse-text mode 11.
+      await worker.setParameters({tessedit_pageseg_mode:idx===3?'11':'7'});
+      const response=await worker.recognize(crop);
+      const line=String(response?.data?.text||'').trim();
+      lastRegion=opts.label;
+      text+=`${opts.label}: ${line||'(none)'}\n`;
+      candidates=detectPrintedIds(line);
+      if(candidates.length)break;
     }
-    if(!candidates.length && !quick){
-      const third=await worker.recognize(canvas);
-      text+='\n'+(third.data.text||'');candidates=detectPrintedIds(text);
+    // Manual Capture can afford a fallback that searches more of the frame.
+    if(!candidates.length&&!quick){
+      await worker.setParameters({tessedit_pageseg_mode:'11'});
+      const resp=await worker.recognize(canvas);
+      const line=String(resp?.data?.text||'').trim();
+      text+=`whole image: ${line||'(none)'}\n`;
+      candidates=detectPrintedIds(line);
     }
-    return {ids:candidates,text};
+    return {ids:candidates,text:text.trim(),lastRegion};
   }
   async function runAutoScan(){
     if(scanner.busy||!scanner.stream||scanner.autoPaused||!scanner.autoEnabled||state.view!=='scan'||document.hidden)return;
@@ -382,12 +430,12 @@
     scanner.busy=true;scanner.autoAttempt++;
     updateScanButtons();setScanStatus('Automatic detection scanning… Keep the card still and its bottom code uncovered.');
     try{
-      const canvas=scaledCanvas(video,video.videoWidth,video.videoHeight,1550);
+      const canvas=visibleCameraCanvas(video,2100);
       const worker=await getOcrWorker();
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream)return;
       const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt});
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
-      setScanDiagnostics('Last OCR text: '+(result.text.trim()||'(no readable text)'));
+      setScanDiagnostics(`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no readable text)'));
       const found=bestCandidate(result.ids);
       if(found===scanner.autoIgnoreId){
         // The just-saved card is still in view. Do not immediately scan it again.
@@ -428,7 +476,7 @@
       if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
       const result=await recognizeIdFrame(canvas,worker);
       if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
-      setScanDiagnostics('Last OCR text: '+(result.text.trim()||'(no readable text)'));
+      setScanDiagnostics(`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no readable text)'));
       const id=bestCandidate(result.ids);
       renderScanMatch(id,!id);
       setScanStatus(id?'Possible ID detected — verify it and choose the right printing before saving.':'No ID found. Try more light, better focus, and an unobstructed bottom edge; or type the printed ID manually.');
@@ -440,20 +488,52 @@
     const base=baseId.replace(/_p\d+$/i,'');
     return state.catalog.filter(c=>c.id===base||c.id.startsWith(`${base}_p`)).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
   }
-  function renderScanMatch(detectedId,manual=false) {
-    const id=safeId(detectedId);const known=catalogCard(id);
-    const variants=variantOptions(id);
+  // Scan confirmations live in the modal layer above the camera, not in the
+  // below-camera result column. Camera remains open but automatic OCR pauses.
+  function scanImageHtml(id, known){
+    const src=known?.image||imageUrl(id);
+    return `<div class="scan-popup-art"><img class="scan-confirm-image" id="scanMatchImage" src="${escapeHtml(src)}" alt="Catalog image of ${escapeHtml(known?.name||id||'card')}"/><div class="scan-art-fallback" hidden>Card image unavailable</div></div>`;
+  }
+  function scanModal(content,step){
+    scanner.dialogOpen=true;scanner.autoPaused=true;clearAutoTimer();
+    modalLayer.innerHTML=`<div class="modal-overlay scan-modal-overlay" id="modalOverlay"><section class="modal scan-modal" role="dialog" aria-modal="true" aria-label="${step==='confirm'?'Confirm detected card':'Add scanned card'}"><button class="modal-close" type="button" data-action="scan-reject" aria-label="Close card scanner dialog">×</button>${content}</section></div>`;
+    const first=modalLayer.querySelector('[data-action="scan-confirm-yes"],#scanCardId,[data-action="scan-reject"]');
+    first?.focus({preventScroll:true});
+  }
+  function resumeScanning({ignoreId='',message='Ready for the next card.'}={}){
+    scanner.dialogOpen=false;scanner.matchId='';closeModal();
+    scanner.autoPaused=false;scanner.autoIgnoreId=ignoreId;scanner.autoClearFrames=0;
+    scanner.scanToken++;clearAutoProgress();
+    setScanResult('');setScanStatus(message);updateScanButtons();scheduleAutoScan(950);
+  }
+  function renderScanMatch(detectedId,manual=false){
+    if(state.view!=='scan')return;
+    const id=safeId(detectedId);
+    scanner.matchId=id;
+    if(manual||!id){renderScanEditor(id);return;}
+    const known=catalogCard(id);
+    setScanResult(`<p class="scan-status">Card ${escapeHtml(id)} detected. Confirm it in the popup above the camera.</p>`);
+    scanModal(`<div class="scan-popup-eyebrow">CARD DETECTED</div>
+      <h2>Is this your card?</h2>
+      <div class="scan-confirm-hero">${scanImageHtml(id,known)}<div class="scan-confirm-details"><strong class="scan-confirm-name">${escapeHtml(known?.name||'Unknown card')}</strong><span class="scan-confirm-id">${escapeHtml(id)}</span><small>${escapeHtml(known?cardMeta(known):'Card number detected · not found in loaded English catalog')}</small><span class="scan-confirm-owned">${fmt(qtyFor(id))} already owned</span></div></div>
+      <p class="scan-confirm-note">This is the catalog image for the detected ID. Alternate artworks can share a printed ID, so verify the picture before saving.</p>
+      <div class="scan-confirm-buttons"><button type="button" class="button btn-outline" data-action="scan-reject">No, scan again</button><button type="button" class="button btn-primary" data-action="scan-confirm-yes">Yes, this card</button></div>
+      <button type="button" class="scan-edit-link" data-action="scan-edit-id">Wrong ID? Correct it manually</button>`, 'confirm');
+  }
+  function renderScanEditor(detectedId=''){
+    const id=safeId(detectedId),known=catalogCard(id),variants=variantOptions(id);
     const defaultName=known?.name||id;
-    setScanResult(`<form data-form="scan-add" class="scan-add-form"><div class="scan-match-label">${manual?'MANUAL VERIFICATION':'POSSIBLE CARD MATCH'}</div>
-      <div class="scan-match-card"><img id="scanMatchImage" src="${imageUrl(id)}" alt="Card artwork preview"/><div><strong id="scanMatchName">${escapeHtml(defaultName||'Enter card ID')}</strong><span id="scanMatchMeta">${escapeHtml(known?cardMeta(known):'Check the card number below')}</span><small id="scanOwnedCount">${fmt(qtyFor(id))} copies owned</small></div></div>
+    scanner.matchId=id;
+    scanModal(`<div class="scan-popup-eyebrow">ADD TO COLLECTION</div><h2>Save scanned card</h2>
+      <form data-form="scan-add" class="scan-add-form">
+      <div class="scan-match-card scan-popup-match">${scanImageHtml(id,known)}<div><strong id="scanMatchName">${escapeHtml(defaultName||'Enter card ID')}</strong><span id="scanMatchMeta">${escapeHtml(known?cardMeta(known):'Enter or correct the printed card ID')}</span><small id="scanOwnedCount">${fmt(qtyFor(id))} copies owned</small></div></div>
       <div class="form-fields"><label>Printed card ID<input id="scanCardId" class="field" name="cardId" maxlength="40" required spellcheck="false" autocapitalize="characters" placeholder="OP05-015" value="${escapeHtml(id)}" /></label>
       <label id="scanVariantWrap" ${variants.length>1?'':'hidden'}>Printing / alternate artwork<select class="select" id="scanVariantSelect">${variants.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===id?'selected':''}>${escapeHtml(c.id)} · ${escapeHtml(c.name)}</option>`).join('')}</select></label>
-      <label>Card name (editable for uncatalogued cards)<input class="field" id="scanCardName" name="name" maxlength="150" value="${escapeHtml(defaultName)}" placeholder="Name of the card" /></label>
-      <div class="scan-fields-two"><label>Copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Storage location<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
+      <label>Card name (editable if not in catalog)<input class="field" id="scanCardName" name="name" maxlength="150" value="${escapeHtml(defaultName)}" placeholder="Card name" /></label>
+      <div class="scan-fields-two"><label>Copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Storage box<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
       <label>Optional note / position<input class="field" name="slot" maxlength="100" value="${escapeHtml(scanner.lastSlot)}" placeholder="Optional" /></label></div>
-      <p class="hint">When a foil or alternate art cannot be identified, try a different photo or choose the printing. Recognition still relies on OCR; exact artwork matching is not automatic yet.</p>
-      <div class="scan-result-actions"><button class="button btn-outline" type="button" data-action="scan-again">↻ Scan again</button><button class="button btn-primary" type="submit">＋ Save & next card</button></div>
-    </form>`);
+      <div class="scan-confirm-buttons scan-save-buttons"><button class="button btn-outline" type="button" data-action="scan-reject">Cancel / scan again</button><button class="button btn-primary" type="submit">＋ Save & next card</button></div>
+      </form>`, 'edit');
   }
   function syncScanCard(){
     const input=document.querySelector('#scanCardId');if(!input)return;
@@ -465,7 +545,7 @@
     if(matchName)matchName.textContent=known?.name||id||'Enter card ID';
     if(matchMeta)matchMeta.textContent=known?cardMeta(known):'Check the card number below';
     if(owned)owned.textContent=`${fmt(qtyFor(id))} copies owned`;
-    if(img)img.src=imageUrl(id);
+    if(img){img.src=known?.image||imageUrl(id);img.alt='Catalog image of '+(known?.name||id||'card');img.hidden=false;const fallback=img.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=true;}
   }
 
   function dashboardView() {
@@ -846,7 +926,7 @@
   function setView(next) {
     if(!views.has(next)) return;
     if(next===state.view){document.querySelector('.sidebar').classList.remove('open');return;}
-    if(state.view==='scan' && next!=='scan'){stopCamera();scanner.session++;scanner.busy=false;}
+    if(state.view==='scan' && next!=='scan'){scanner.dialogOpen=false;scanner.matchId='';closeModal();stopCamera();scanner.session++;scanner.busy=false;}
     state.view=next;document.querySelector('.sidebar').classList.remove('open');
     render();window.scrollTo({top:0,behavior:'instant'});
   }
@@ -896,7 +976,10 @@
     if(action==='deck-add'||action==='deck-plus'){addDeckCard(id,1);return;}
     if(action==='deck-minus'){addDeckCard(id,-1);return;}
     if(action==='export-deck'){exportDeck();return;}
-    if(action==='close-modal'){closeModal();return;}
+    if(action==='close-modal'){if(scanner.dialogOpen){resumeScanning({message:'Confirmation dismissed. Present a card to scan again.'});}else closeModal();return;}
+    if(action==='scan-reject'){resumeScanning({message:'Card not added. Hold a card steady to scan again.'});return;}
+    if(action==='scan-confirm-yes'){if(scanner.dialogOpen)renderScanEditor(scanner.matchId);return;}
+    if(action==='scan-edit-id'){if(scanner.dialogOpen)renderScanEditor(scanner.matchId);return;}
     if(action==='open-custom'){openAdd();return;}
     if(action==='open-bulk'){openBulk();return;}
     if(action==='open-import'){openRestore();return;}
@@ -926,7 +1009,7 @@
     if(action==='toggle-auto'){toggleAuto();return;}
     if(action==='stop-camera'){stopCamera();updateScanButtons();setScanStatus('Camera stopped. You can start it again or choose a photo.');return;}
     if(action==='capture-card'){captureCard();return;}
-    if(action==='scan-again'){scanner.autoPaused=false;scanner.autoIgnoreId='';scanner.scanToken++;clearAutoProgress();setScanResult('');setScanStatus(scanner.autoEnabled?'Looking for the next card automatically…':'Ready for another card. Use Capture once.');updateScanButtons();scheduleAutoScan(400);return;}
+    if(action==='scan-again'){resumeScanning({message:scanner.autoEnabled?'Looking for the next card automatically…':'Ready for another card. Use Capture once.'});return;}
     if(action==='confirm-restore'){
       const inp=document.querySelector('#restoreFile');const file=inp?.files?.[0];if(!file){toast('Choose a JSON file first.',true);return;}
       if(file.size>20*1024*1024){toast('File is too large (max 20 MB).',true);return;}
@@ -965,6 +1048,7 @@
       const known=catalogCard(id),name=known?.name||String(f.get('name')||'').trim()||id;
       if(addCopies(id,name,qty,loc,slot,'',known?.rarity||'',known?.colors||'',false)){
         scanner.lastLocationId=loc;scanner.lastSlot=slot;scanner.saved+=qty;
+        scanner.dialogOpen=false;scanner.matchId='';closeModal();
         const count=document.querySelector('#scanSaved');if(count)count.textContent=fmt(scanner.saved);
         scanner.autoPaused=false;scanner.autoIgnoreId=id;scanner.autoClearFrames=0;scanner.autoHistory=[];
         setScanResult('');setScanStatus(`Saved ${qty} × ${id} (${name}). Remove this card and present the next one.`);updateScanButtons();scheduleAutoScan(1300);
@@ -1040,13 +1124,13 @@
     if(e.target.id==='scanCardId'){syncScanCard();}
   });
   document.addEventListener('input',e=>{if(e.target.id==='scanCardId')syncScanCard();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modalLayer.childElementCount)closeModal();});
-  modalLayer.addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modalLayer.childElementCount){if(scanner.dialogOpen)resumeScanning({message:'Confirmation dismissed. Scanning resumes.'});else closeModal();}});
+  modalLayer.addEventListener('click',e=>{if(e.target.id==='modalOverlay'){if(scanner.dialogOpen)resumeScanning({message:'Confirmation dismissed. Scanning resumes.'});else closeModal();}});
   document.querySelector('#menuToggle').addEventListener('click',()=>document.querySelector('.sidebar').classList.toggle('open'));
   document.querySelector('#backupBtn').addEventListener('click',downloadBackup);
   document.addEventListener('visibilitychange',()=>{if(document.hidden && scanner.stream){stopCamera();updateScanButtons();setScanStatus('Camera paused. Press Start camera to resume.');}});
   window.addEventListener('pagehide',()=>{stopCamera();if(scanner.worker)scanner.worker.terminate();});
-  document.addEventListener('error',e=>{if(e.target instanceof HTMLImageElement && e.target.closest('.card-art,.card-cell,.modal-card-heading'))e.target.style.visibility='hidden';},true);
+  document.addEventListener('error',e=>{if(e.target instanceof HTMLImageElement && e.target.matches('.scan-confirm-image')){e.target.hidden=true;const fallback=e.target.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=false;}else if(e.target instanceof HTMLImageElement && e.target.closest('.card-art,.card-cell,.modal-card-heading'))e.target.style.visibility='hidden';},true);
 
   function normalizeCatalog(source) {
     const records=Array.isArray(source)?source:Object.entries(source).map(([id,v])=>({...v,id:v?.id||id}));
