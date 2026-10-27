@@ -122,10 +122,10 @@
     const payload=JSON.parse(JSON.stringify(state.data));
     const expected=sync.revision;
     try{
-      const {data,error}=await sync.client.rpc('save_vault',{p_document:payload,p_expected_revision:expected});
+      const {data,error}=await sync.client.rpc('save_shared_vault',{p_document:payload,p_expected_revision:expected});
       if(error)throw error;
       sync.revision=Number(data);
-      syncStatus('Cloud synced · revision '+sync.revision);
+      syncStatus('Shared vault synced · revision '+sync.revision);
       // Changes made during the request must also be written.
       if(JSON.stringify(state.data)!==JSON.stringify(payload))scheduleCloudSave();
     } catch(err){
@@ -691,28 +691,28 @@
   function snapshotFilters(){return {query:state.query,color:state.color,set:state.set,filters:{...state.filters,costs:[...state.filters.costs]}};}
   function applySavedPreset(p){state.query=p.query;state.color=p.color;state.set=p.set;state.filters={...p.filters,costs:new Set(p.filters.costs)};state.perPage=48;render();}
   function cloudView(){const configured=Boolean(sync.config);const signedIn=Boolean(sync.user);
-    return pageHeading('YOUR PRIVATE COLLECTION','Cloud synchronization','Sign in on your phone and PC to see the same numbered boxes, inventory, saved filters and deck plans.')+
-      `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p><p class="hint">Inventory always saves locally first. Upload/download choices protect existing collections. Cloud sync requires your own Supabase project and the SQL included in this ZIP.</p>
+    return pageHeading('PRIVATE FRIENDS-ONLY COLLECTION','Shared cloud synchronization','Approved friends use separate email logins but share the same numbered boxes, inventory, filters and deck plans.')+
+      `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p><p class="hint">Inventory always saves locally first. Upload/download choices protect existing collections. Cloud sync requires the shared-vault SQL included in this ZIP. Only admin-approved email addresses can access shared data. Cloud changes on another device may require Refresh from cloud.</p>
       <form data-form="cloud-config"><div class="form-fields"><label>Supabase project URL<input class="field" type="url" name="url" placeholder="https://yourproject.supabase.co" value="${escapeHtml(sync.config?.url||'')}" required></label><label>Supabase publishable (anon) key<input class="field" name="key" placeholder="sb_publishable_..." value="${escapeHtml(sync.config?.key||'')}" required></label></div><p class="hint">Never paste a Supabase service_role or secret key into this app.</p><button type="submit" class="button btn-outline">${configured?'Update connection':'Connect Supabase'}</button></form>
       ${configured?`<hr/><form data-form="cloud-login"><label>Email for a magic sign-in link<input class="field" type="email" name="email" required placeholder="you@example.com"></label><div class="actions"><button type="submit" class="button btn-primary">Email me a sign-in link</button>${signedIn?`<button class="button btn-outline" data-action="cloud-refresh" type="button">Refresh from cloud</button><button class="button btn-ghost" data-action="cloud-signout" type="button">Sign out</button>`:''}</div></form>`:''}
       <p class="hint">${signedIn?`Signed in: ${escapeHtml(sync.user.email||'Account')} · `:''}${sync.ready?'Automatic sync enabled.':'Local mode remains available even without a cloud connection.'}</p></section>`;
   }
   function showCloudChoice(remote){
     sync.ready=false;
-    modal(`<h2>Two different collections detected</h2><p class="subhead">Your browser has saved inventory/decks, and your cloud account has a different saved collection. We will never silently overwrite either.</p><p class="hint">Download a JSON backup first, especially if you made changes on both devices.</p><div class="actions"><button class="button btn-outline" type="button" data-action="export-backup-cloud">Download local backup</button><button class="button btn-primary" type="button" data-action="cloud-choose-remote">Use cloud collection</button><button class="button btn-danger" type="button" data-action="cloud-choose-local">Replace cloud with local</button></div>`);
+    modal(`<h2>Two different collections detected</h2><p class="subhead">Your browser has saved inventory/decks, and your group shared vault has a different saved collection. We will never silently overwrite either.</p><p class="hint">Download a JSON backup first, especially if you made changes on both devices.</p><div class="actions"><button class="button btn-outline" type="button" data-action="export-backup-cloud">Download local backup</button><button class="button btn-primary" type="button" data-action="cloud-choose-remote">Use cloud collection</button><button class="button btn-danger" type="button" data-action="cloud-choose-local">Replace shared vault with local</button></div>`);
     sync.remotePending=remote;
   }
   async function establishCloud(){
     if(!sync.client||!sync.user||sync.connecting)return;
     sync.connecting=true;sync.ready=false;clearTimeout(sync.timer);
     try{
-      const {data,error}=await sync.client.from('user_vaults').select('document,revision').eq('user_id',sync.user.id).maybeSingle();
+      const {data,error}=await sync.client.from('shared_vault').select('document,revision').eq('id','main').maybeSingle();
       if(error)throw error;
-      const remote=data?.document?normalizeData(data.document):null;
-      sync.revision=data?Number(data.revision):0;
-      if(!remote){sync.ready=true;syncStatus('Creating your cloud collection…');await sendCloudSave();}
-      else if(isEmptyCollection(state.data)||JSON.stringify(remote)===JSON.stringify(state.data)){
-        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;syncStatus('Cloud loaded · revision '+sync.revision);render();
+      if(!data)throw new Error('No shared-vault access. Ask the project owner to approve your sign-in email in vault_members, then refresh.');
+      const remote=normalizeData(data.document||{});
+      sync.revision=Number(data.revision);
+      if(isEmptyCollection(state.data)||JSON.stringify(remote)===JSON.stringify(state.data)){
+        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;syncStatus('Shared vault loaded · revision '+sync.revision);render();
       } else {showCloudChoice(remote);syncStatus('Choose which collection to keep');}
     }catch(err){syncStatus('Cloud connection error: '+(err.message||String(err)));toast('Cloud connection failed. Local cards remain saved.',true);}
     finally{sync.connecting=false;}
@@ -765,11 +765,11 @@
     if(action==='export-backup-cloud'){downloadBackup();return;}
     if(action==='cloud-choose-remote'){
       if(!sync.remotePending)return;
-      downloadBackup();state.data=sync.remotePending;sync.remotePending=null;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;closeModal();syncStatus('Using cloud collection · revision '+sync.revision);render();toast('Cloud collection loaded. Local JSON backup downloaded.');return;
+      downloadBackup();state.data=sync.remotePending;sync.remotePending=null;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;closeModal();syncStatus('Using shared collection · revision '+sync.revision);render();toast('Cloud collection loaded. Local JSON backup downloaded.');return;
     }
     if(action==='cloud-choose-local'){
       if(!sync.remotePending)return;
-      if(!confirm('Overwrite cloud collection with the current local cards and decks? Cloud changes on other devices might be lost.'))return;
+      if(!confirm("REPLACE EVERYONE'S shared vault with your local cards and decks? Other members' changes could be lost. Download a backup first."))return;
       sync.remotePending=null;sync.ready=true;closeModal();sendCloudSave();render();return;
     }
     if(action==='cloud-refresh'){establishCloud();return;}

@@ -1,35 +1,19 @@
-# Grand Line Vault v1.0.0 — One Piece TCG
+# Grand Line Vault v1.0.1 — Shared with Friends
 
-**First official release.** Ignore previous prototype labels; future releases will be numbered v1.1, v1.2, v2.0, etc. The app's internal browser storage key remains stable so updates can preserve data.
+**Use this package if you want ONE collection for you and a small circle of approved friends.** It replaces the initial v1.0.0 cloud model of one vault per user. See `START-HERE.md` before uploading to GitHub.
 
-## Open `START-HERE.md` for the full setup tutorial
+## Features
 
-This is a static web app published through GitHub Pages and optionally synced to a private Supabase database. No local development tools or terminal are needed.
+- Phone camera OCR and card photo import; user correction if uncertain.
+- Card catalog with English set data, individual cost/trait/counter/power/text search and saved filters.
+- Numbered storage boxes, collection quantities, CSV imports and JSON backups.
+- Virtual deck plans, OPTCGSim imports/exports, deck JSON, optional reservations with warnings.
+- NEW: One shared cloud vault with RLS-protected allowlist of emails. Each friend signs in with their own email to access the same collection and decks.
 
-### Features in v1.0.0
+## Security model and limitations
 
-- English card catalog with detailed filters: individual DON!! costs, colors, power, counters, traits/crews, rarity, attributes, effects, triggers, exact phrases, ownership, and saved filter presets.
-- Mobile camera/photo **OCR reads printed card IDs**. Retake or manually choose a printing if needed. **Automatic exact-artwork recognition has not been implemented.**
-- Physical card inventory grouped into numbered boxes (Box 1, 2, 3, ...), with quantities and optional notes.
-- Multiple virtual decks, OPTCGSim text import/export, Grand Line Vault deck JSON import/export, optional physical copy reservations and conflict warnings.
-- Collection import/export CSV (card_id, qty, box, name), and full JSON backups with deck plans and presets.
-- Optional Supabase email sign-in with local-first cloud synchronization and revision conflict detection.
+GitHub Pages publishes the app code as a public web site; **inventory and decks are not stored in the repo**. Supabase `shared_vault` is the persistent collection; `vault_members` is an allowlist editable by the Supabase administrator. RLS policies protect the database at the server even when the app's public publishable key is known. Friends should never be made Supabase *project team members* just to gain app access. Setup of a custom SMTP service is needed for sending login emails to ordinary friends.
 
-### Save locations and future upgrades
+The app also caches collection data in browser localStorage on signed-in devices, so choose trusted devices. It is NOT designed to protect the local cache on a shared computer, and revoking cloud permission cannot remotely erase downloaded copies. Concurrent edits to the JSON cloud snapshot are detected but not merged; refresh and reconcile after conflicts.
 
-- **GitHub** holds only the app code, not the cards you scan or your decks.
-- Your browser saves the working copy in localStorage under `grand-line-vault-v1`.
-- Once you configure and sign into **Supabase**, a private cloud copy can synchronize between phone and PC.
-- A complete JSON backup includes the collection, boxes, saved decks, reservations, and filter presets. Export one before every update.
-- Keep using the same GitHub Pages website URL and Supabase project when updating app code. Do not delete Supabase tables.
-
-### Current limitations
-
-- OCR confidence is not established with real phones; glare, foils, and sleeves can reduce accuracy. Photographing **exact alternate artwork automatically** is still a future enhancement.
-- The English catalog, card art, OCR assets, and cloud SDK load over the internet from external services.
-- Reservations are virtual, not physical transfers. Banned/restricted cards and special construction rules are **not** checked automatically; deck legality warnings are advisory.
-- Supabase live sign-in/sync and physical camera usage must be tested with your own accounts and phone. The release has local code-level tests, not a confirmed production deployment.
-- Cloud conflict resolution is manual; avoid editing at the same time on two offline devices.
-- The Supabase Free plan may pause inactive projects and built-in email has strict delivery restrictions. See `START-HERE.md`.
-
-Fan-made project, not affiliated with Bandai. The card data/image source is a third-party English catalog: https://github.com/michalkiral/optcg-data. Images remain the property of their owners.
+Exact alternate artwork photo matching, comprehensive banned-card checks and automated real-world camera accuracy testing are not available yet. Fan-made project not affiliated with Bandai. Base English card catalog: https://github.com/michalkiral/optcg-data.
