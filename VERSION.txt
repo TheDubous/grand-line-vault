@@ -1,2 +1,2 @@
-Grand Line Vault 1.0.1 (friends-only shared vault)
+Grand Line Vault 1.1.0 (automatic live OCR + friends-only shared vault)
 Released: 2026-10-27

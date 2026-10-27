@@ -1,3 +1,7 @@
+# Update to v1.1.0 automatic scanner
+
+If your app is **already working in GitHub Pages and Supabase**, do not repeat the initial installation steps. Download a JSON backup, replace the GitHub repository files with this ZIP contents, and keep the same Supabase database. See `README.md` for precise updating steps.
+
 # Grand Line Vault v1.0.1 — shared friends-only cloud setup
 
 **This package replaces v1.0.0 if you want all friends to see ONE shared inventory and the SAME decks.** Use this ZIP for your first GitHub upload. The code is still Grand Line Vault version 1, not version 3.

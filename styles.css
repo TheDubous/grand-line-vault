@@ -71,3 +71,24 @@ button:disabled{cursor:not-allowed;opacity:.46}
 .preset-controls select{width:100%;display:block;margin-top:6px}
 .deck-toolbar .actions{flex-wrap:wrap}
 #cloudState{font-weight:650;margin-bottom:12px;overflow-wrap:anywhere}
+
+/* v1.1.0 — on-device live automatic scanning */
+.scan-auto.is-on{background:#15463b;border-color:#287e64;color:#c8ffe6}
+.scan-auto.is-on:hover{background:#1b5346}
+.scan-outline-label{position:absolute;bottom:17%;left:0;right:0;font-size:9px;letter-spacing:1px;color:#fff4ca;text-align:center;text-shadow:0 1px 4px #000;font-weight:800}
+.scan-bottom-highlight{height:12%;bottom:2%;right:4%;width:90%;border-color:#f9cf75}
+.scan-diagnostics{background:#0d1b2d;border:1px solid #30465c;color:#b0c6d5;border-radius:8px;margin:10px 0;padding:9px 12px;font-size:11px;overflow-wrap:anywhere}
+.scan-diagnostics summary{cursor:pointer;color:#f4cf8d;font-weight:650}
+.scan-diagnostics p{white-space:pre-wrap;max-height:145px;overflow-y:auto}
+@media(max-width:690px){
+  .scanner-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .scanner-controls #scanAuto{grid-column:1/-1;grid-row:1;min-height:46px}
+  .scanner-controls #scanStart{grid-column:1;grid-row:2}
+  .scanner-controls #scanStop{grid-column:2;grid-row:2}
+  .scanner-controls #scanCapture{grid-column:1/-1;grid-row:3;min-height:45px}
+}
+
+@media(max-width:690px){
+ .scanner-controls #scanFlip{grid-column:1;grid-row:3}
+ .scanner-controls #scanCapture{grid-column:2;grid-row:3}
+}

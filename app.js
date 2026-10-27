@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.0.0 — One Piece TCG collection + deck planner.
+/* Grand Line Vault v1.1.0 — One Piece TCG collection + deck planner.
    Local-first data with optional user-owned Supabase cloud sync. */
 (() => {
   'use strict';
@@ -105,7 +105,7 @@
     try { const raw=localStorage.getItem(KEY); return raw ? normalizeData(JSON.parse(raw)) : initialData(); }
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'unsorted',lastSlot:'',saved:0};
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'unsorted',lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment'};
   const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
   const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null};
@@ -178,14 +178,15 @@
 
   // Camera access requires HTTPS (such as GitHub Pages) or localhost; photo import is the fallback.
   function scanView() {
-    return pageHeading('FAST COLLECTION ENTRY','Scan with your phone','Point your camera at a physical One Piece TCG card. We read its printed card ID using on-device text recognition.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
+    return pageHeading('HANDS-FREE COLLECTION ENTRY','Automatic card scanner','Hold the bottom of an English One Piece TCG card unobstructed inside the guide. The scanner checks live camera frames automatically — you do not need to take a photo.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
     `<div class="scanner-layout"><section class="panel scanner-panel">
-      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Your camera appears here</strong><small>For best results, hold the whole card steady, with the card number clearly visible near its bottom edge.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div></div></div>
-      <div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start rear camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture & recognize</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
+      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Your camera appears here</strong><small>Keep your fingers away from the bottom edge. More light, less glare, and sharp focus improve recognition.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">CARD BOTTOM / ID</span></div></div>
+      <div class="scanner-controls"><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Automatic detection ON':'○ Automatic detection OFF'}</button><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start rear camera</button><button class="button btn-outline" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture once</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop camera</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Switch camera</button></div>
       <label class="photo-import button btn-outline">↥ Take / upload photo<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
-      <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Tap Start rear camera, or use your phone's camera/photo picker. Allow camera access when prompted.</p>
-      <p class="hint">The image is processed on this device and is not uploaded to us. First-time OCR needs an internet connection to load its recognition engine. Photo access works even when live camera permission is unavailable.</p>
-    </section><section class="panel scanner-result-panel"><div class="scanner-result-top"><h3>Identify and store</h3><span class="location-pill">Saved this session: <strong id="scanSaved">${fmt(scanner.saved)}</strong></span></div><div id="scanResult">${empty('▤','No scan yet','Capture a card to detect its ID, review the match and choose where it lives.')}</div></section></div>`;
+      <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Press Start rear camera. Automatic recognition is ON. You can switch it off or use Capture once.</p>
+      <details class="scan-diagnostics"><summary>Recognition diagnostics</summary><p id="scanDiagnostics">No recognition attempted yet.</p></details>
+      <p class="hint">Live OCR analyzes temporary frames on your device; it does not save or upload camera photos. The camera runs during your scan session and stops when you press Stop, leave this page, or background the app. First-time OCR needs internet access to load Tesseract.</p>
+    </section><section class="panel scanner-result-panel"><div class="scanner-result-top"><h3>Identify and store</h3><span class="location-pill">Saved this session: <strong id="scanSaved">${fmt(scanner.saved)}</strong></span></div><div id="scanResult">${empty('▤','Looking for your first card','Start the rear camera, then hold a card still with the bottom ID completely visible.')}</div></section></div>`;
   }
   const isCardCode = id => /^(?:(?:OP|ST|EB|PRB)\d{1,3}-\d{2,4}|P-\d{2,4})(?:_p\d+)?$/i.test(id);
   function detectPrintedIds(text) {
@@ -198,27 +199,58 @@
       const p=m[1].replace(/^0P/,'OP'),set=normalizeNum(m[2]).padStart(2,'0'),number=normalizeNum(m[3]).padStart(3,'0');
       const id=`${p}${set}-${number}`;if(isCardCode(id)&&!result.includes(id))result.push(id);
     }
+    // OCR can drop the hyphen entirely (e.g. OP05015). Restrict to the usual
+    // 2-digit set + 3-digit card format to avoid arbitrary numeric guesses.
+    const compact=/(?:^|[^A-Z0-9])((?:[O0]P|ST|EB|PRB))\s*([0-9OQDILSB]{2})([0-9OQDILSB]{3})(?![0-9A-Z])/g;
+    while((m=compact.exec(clean))!==null) {
+      const p=m[1].replace(/^0P/,'OP');
+      const id=`${p}${normalizeNum(m[2])}-${normalizeNum(m[3])}`;
+      if(isCardCode(id)&&!result.includes(id))result.push(id);
+    }
     const promo=/(?:^|[^A-Z0-9])P\s*-\s*([0-9OQDILSB]{2,4})(?![0-9A-Z])/g;
     while((m=promo.exec(clean))!==null){const id=`P-${normalizeNum(m[1]).padStart(3,'0')}`;if(!result.includes(id))result.push(id);}
     return result;
   }
   function setScanStatus(message) {const el=document.querySelector('#scanStatus');if(el)el.textContent=message;}
-  function setScanResult(markup) {const el=document.querySelector('#scanResult');if(el)el.innerHTML=markup||empty('▤','Ready for the next card','Capture another card or choose another photo.');}
+  function setScanDiagnostics(message){const el=document.querySelector('#scanDiagnostics');if(el)el.textContent=String(message||'No text recognized').slice(0,450);}
+  function setScanResult(markup) {const el=document.querySelector('#scanResult');if(el)el.innerHTML=markup||empty('▤','Ready for the next card','Present the next card to the live camera. The app will identify it automatically.');}
   function updateScanButtons() {
     if(state.view!=='scan')return;
     const ready=Boolean(scanner.stream)&&!scanner.busy;
-    const capture=document.querySelector('#scanCapture'),start=document.querySelector('#scanStart'),stop=document.querySelector('#scanStop');
+    const capture=document.querySelector('#scanCapture'),start=document.querySelector('#scanStart'),stop=document.querySelector('#scanStop'),auto=document.querySelector('#scanAuto'),flip=document.querySelector('#scanFlip');
     if(capture)capture.disabled=!ready;
     if(start){start.disabled=scanner.busy||!!scanner.stream;start.textContent=scanner.stream?'Camera running':'◎ Start rear camera';}
     if(stop)stop.disabled=!scanner.stream;
+    if(flip)flip.disabled=!scanner.stream||scanner.busy;
+    if(auto){auto.textContent=scanner.autoEnabled?'● Automatic detection ON':'○ Automatic detection OFF';auto.setAttribute('aria-pressed',String(scanner.autoEnabled));auto.classList.toggle('is-on',scanner.autoEnabled);}
     const picker=document.querySelector('#scanPhoto');if(picker)picker.disabled=scanner.busy;
   }
+  function clearAutoTimer(){if(scanner.autoTimer!==null){clearTimeout(scanner.autoTimer);scanner.autoTimer=null;}}
+  function clearAutoProgress(){scanner.autoHistory=[];scanner.autoAttempt=0;scanner.autoClearFrames=0;}
+  function scheduleAutoScan(delay=900){
+    clearAutoTimer();
+    if(state.view!=='scan'||!scanner.stream||!scanner.autoEnabled||scanner.autoPaused||scanner.busy||document.hidden)return;
+    scanner.autoTimer=setTimeout(()=>{scanner.autoTimer=null;runAutoScan();},delay);
+  }
   function stopCamera(){
+    clearAutoTimer();scanner.scanToken++;clearAutoProgress();scanner.autoPaused=false;scanner.autoIgnoreId='';
     const current=scanner.stream;scanner.stream=null;
     if(current)current.getTracks().forEach(track=>track.stop());
     const video=document.querySelector('#scanVideo');if(video)video.srcObject=null;
     const placeholder=document.querySelector('#scanPlaceholder');if(placeholder)placeholder.hidden=false;
     const preview=document.querySelector('#scanPreview');if(preview)preview.classList.remove('live');
+  }
+  function toggleAuto(){
+    scanner.autoEnabled=!scanner.autoEnabled;
+    scanner.autoPaused=false;scanner.scanToken++;clearAutoProgress();scanner.autoIgnoreId='';clearAutoTimer();
+    if(scanner.autoEnabled){setScanResult('');setScanStatus(scanner.stream?'Automatic detection enabled. Hold a card steady with the bottom code uncovered.':'Automatic detection enabled. Start the camera.');scheduleAutoScan(400);}
+    else setScanStatus('Automatic detection paused. Use Capture once to recognize a card manually.');
+    updateScanButtons();
+  }
+  async function flipCamera(){
+    if(scanner.busy||!scanner.stream)return;
+    scanner.facing=scanner.facing==='environment'?'user':'environment';
+    stopCamera();updateScanButtons();await startCamera();
   }
   async function startCamera(){
     if(scanner.stream||scanner.busy)return;
@@ -226,17 +258,24 @@
     const session=scanner.session;
     setScanStatus('Requesting permission for rear camera…');
     try {
-      const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+      // Ask for the selected lens explicitly on phones; ideal-only constraints
+      // can silently select a front-facing camera on some devices.
+      let stream;
+      try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{exact:scanner.facing},width:{ideal:1920},height:{ideal:1080}}});}
+      catch(err){if(!['OverconstrainedError','NotFoundError','TypeError'].includes(err.name))throw err;
+        stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:scanner.facing},width:{ideal:1920},height:{ideal:1080}}});
+      }
       if(session!==scanner.session||state.view!=='scan'){stream.getTracks().forEach(track=>track.stop());return;}
       scanner.stream=stream;
       const video=document.querySelector('#scanVideo');if(!video){stopCamera();return;}
       video.srcObject=stream;
       await video.play();
-      if(session!==scanner.session){stopCamera();return;}
+      if(session!==scanner.session||!scanner.stream){stopCamera();return;}
       document.querySelector('#scanPlaceholder').hidden=true;
       document.querySelector('#scanPreview').classList.add('live');
-      setScanStatus('Camera is ready. Keep the bottom card code visible, then tap Capture & recognize.');
-      updateScanButtons();
+      const actualLens=stream.getVideoTracks()[0]?.getSettings?.().facingMode;
+      setScanStatus(actualLens==='user'?'Front camera selected. Use Switch camera to try the rear lens and get sharper card text.':scanner.autoEnabled?'Automatic detection active. Hold a card steady with its bottom edge uncovered.':'Camera ready. Use Capture once.');
+      updateScanButtons();scheduleAutoScan(600);
     }catch(err){stopCamera();setScanStatus('Could not start camera: '+(err.name==='NotAllowedError'?'permission denied. Allow camera in browser settings, or use Take / upload photo.':`${err.message || 'camera not available'}. You can still use a photo.`));updateScanButtons();}
   }
   function scaledCanvas(source,width,height,maxEdge=1800) {
@@ -250,13 +289,15 @@
     if(scanner.busy||!scanner.stream)return;
     const video=document.querySelector('#scanVideo');
     if(!video||!video.videoWidth){setScanStatus('Camera is still warming up. Try again.');return;}
-    await recognizeCanvas(scaledCanvas(video,video.videoWidth,video.videoHeight));
+    clearAutoTimer();scanner.autoPaused=true;scanner.autoIgnoreId='';clearAutoProgress();
+    await recognizeCanvas(scaledCanvas(video,video.videoWidth,video.videoHeight,2000));
   }
   async function recognizePhoto(file){
     if(!file||scanner.busy)return;
     if(!file.type.startsWith('image/')){setScanStatus('Choose an image file.');return;}
     if(file.size>25*1024*1024){setScanStatus('Image is too large; please choose one smaller than 25 MB.');return;}
     const session=scanner.session;
+    clearAutoTimer();scanner.autoPaused=true;scanner.autoIgnoreId='';clearAutoProgress();
     setScanStatus('Reading your photo…');
     let bitmap=null,objectUrl='';
     try {
@@ -296,37 +337,101 @@
       const worker=await window.Tesseract.createWorker('eng',1,{logger:message=>{
         if(state.view==='scan'&&scanner.busy&&message.status==='loading language traineddata')setScanStatus('Loading language data for first scan…');
       }});
-      await worker.setParameters({tessedit_pageseg_mode:'6'});
+      await worker.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'});
       scanner.worker=worker;return worker;
     })().catch(err=>{scanner.workerLoading=null;throw err;});
     return scanner.workerLoading;
   }
-  function bottomCrop(source){
-    // A printed code is generally at the card's bottom. Include most of the lower frame,
-    // then fall back to whole-frame OCR when the crop does not contain an ID.
-    const crop=document.createElement('canvas');
-    crop.width=source.width;crop.height=Math.round(source.height*.55);
+  function ocrCrop(source,{left=0,top=.5,width=1,height=.5,scale=1.4}={}){
+    const x=Math.floor(source.width*left),y=Math.floor(source.height*top);
+    const sw=Math.max(1,Math.floor(source.width*width)),sh=Math.max(1,Math.floor(source.height*height));
+    const enlarged=Math.min(scale,2000/sw);
+    const crop=document.createElement('canvas');crop.width=Math.max(1,Math.round(sw*enlarged));crop.height=Math.max(1,Math.round(sh*enlarged));
     const ctx=crop.getContext('2d',{willReadFrequently:true});
-    ctx.filter='grayscale(1) contrast(1.5)';
-    ctx.drawImage(source,0,source.height-crop.height,source.width,crop.height,0,0,crop.width,crop.height);
+    ctx.filter='grayscale(1) contrast(1.9) brightness(1.13)';
+    ctx.drawImage(source,x,y,sw,sh,0,0,crop.width,crop.height);
     return crop;
+  }
+  function bestCandidate(ids){
+    // Favor catalogued cards, but do not require a network catalog download.
+    return [...ids].sort((a,b)=>Number(Boolean(catalogCard(b)))-Number(Boolean(catalogCard(a))))[0]||'';
+  }
+  async function recognizeIdFrame(canvas,worker,{quick=false,attempt=0}={}){
+    // Printed card IDs are near the card bottom; avoid processing the busy text
+    // and artwork unless needed. Broad and narrow regions cover framing errors.
+    const strip=ocrCrop(canvas,{left:.07,top:.67,width:.86,height:.30,scale:1.65});
+    const first=await worker.recognize(strip);
+    let text=first.data.text||'';
+    let candidates=detectPrintedIds(text);
+    if(!candidates.length && (!quick || attempt%2===0)){
+      const lower=ocrCrop(canvas,{top:.44,height:.56,scale:1.15});
+      const second=await worker.recognize(lower);
+      text+='\n'+(second.data.text||'');candidates=detectPrintedIds(text);
+    }
+    if(!candidates.length && !quick){
+      const third=await worker.recognize(canvas);
+      text+='\n'+(third.data.text||'');candidates=detectPrintedIds(text);
+    }
+    return {ids:candidates,text};
+  }
+  async function runAutoScan(){
+    if(scanner.busy||!scanner.stream||scanner.autoPaused||!scanner.autoEnabled||state.view!=='scan'||document.hidden)return;
+    const video=document.querySelector('#scanVideo');
+    if(!video||!video.videoWidth){scheduleAutoScan(800);return;}
+    const session=scanner.session, token=scanner.scanToken;
+    scanner.busy=true;scanner.autoAttempt++;
+    updateScanButtons();setScanStatus('Automatic detection scanning… Keep the card still and its bottom code uncovered.');
+    try{
+      const canvas=scaledCanvas(video,video.videoWidth,video.videoHeight,1550);
+      const worker=await getOcrWorker();
+      if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream)return;
+      const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt});
+      if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
+      setScanDiagnostics('Last OCR text: '+(result.text.trim()||'(no readable text)'));
+      const found=bestCandidate(result.ids);
+      if(found===scanner.autoIgnoreId){
+        // The just-saved card is still in view. Do not immediately scan it again.
+        scanner.autoClearFrames=0;scanner.autoHistory=[];
+        setScanStatus(`${found} is already saved. Remove it and present the next card.`);
+      }else if(!found){
+        scanner.autoHistory.push('');scanner.autoHistory=scanner.autoHistory.slice(-4);
+        if(scanner.autoIgnoreId && ++scanner.autoClearFrames>=2)scanner.autoIgnoreId='';
+        setScanStatus('Looking for a printed card ID… Move your fingers away from the bottom, get closer, and hold steady.');
+      }else{
+        scanner.autoClearFrames=0;
+        scanner.autoHistory.push(found);scanner.autoHistory=scanner.autoHistory.slice(-4);
+        const hits=scanner.autoHistory.filter(id=>id===found).length;
+        const needed=catalogCard(found)?2:3;
+        if(hits>=needed){
+          scanner.autoPaused=true;clearAutoTimer();
+          renderScanMatch(found,false);
+          setScanStatus(`Detected ${found} automatically. Verify the printing and save it, or choose Scan again.`);
+        }else setScanStatus(`Possible ${found} (${hits}/${needed} checks). Hold steady for confirmation…`);
+      }
+    }catch(err){
+      if(token===scanner.scanToken&&state.view==='scan'){
+        scanner.autoEnabled=false;clearAutoTimer();
+        setScanStatus(`Automatic OCR unavailable: ${err.message||err}. Use Capture once, Take / upload photo, or turn Auto on to retry.`);
+      }
+    }finally{
+      scanner.busy=false;updateScanButtons();scheduleAutoScan(850);
+    }
   }
   async function recognizeCanvas(canvas){
     if(scanner.busy)return;
-    scanner.busy=true;const session=scanner.session;updateScanButtons();
+    clearAutoTimer();scanner.autoPaused=true;
+    scanner.busy=true;const session=scanner.session,token=scanner.scanToken;updateScanButtons();
     setScanResult(`<div class="scan-working"><span class="scan-spinner"></span><h3>Recognizing card number…</h3><p>This can take longer on the first scan.</p></div>`);
-    setScanStatus('Analyzing the bottom of the card…');
+    setScanStatus('Analyzing the bottom card-number region…');
     try {
       const worker=await getOcrWorker();
-      let first=await worker.recognize(bottomCrop(canvas));
-      if(session!==scanner.session||state.view!=='scan')return;
-      let candidates=detectPrintedIds(first.data.text);
-      if(!candidates.length){setScanStatus('Looking for the card number in the whole photo…');const second=await worker.recognize(canvas);candidates=detectPrintedIds(second.data.text);}
-      if(session!==scanner.session||state.view!=='scan')return;
-      // Favor known IDs, while still allowing manually verified codes not in the dataset.
-      candidates.sort((a,b)=>Number(Boolean(catalogCard(b)))-Number(Boolean(catalogCard(a))));
-      renderScanMatch(candidates[0]||'',!candidates.length);
-      setScanStatus(candidates.length?'Possible ID detected — verify it and choose the right printing before saving.':'No card ID found. Enter the code manually or take another picture with less glare.');
+      if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
+      const result=await recognizeIdFrame(canvas,worker);
+      if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
+      setScanDiagnostics('Last OCR text: '+(result.text.trim()||'(no readable text)'));
+      const id=bestCandidate(result.ids);
+      renderScanMatch(id,!id);
+      setScanStatus(id?'Possible ID detected — verify it and choose the right printing before saving.':'No ID found. Try more light, better focus, and an unobstructed bottom edge; or type the printed ID manually.');
     }catch(err){if(session===scanner.session&&state.view==='scan'){renderScanMatch('',true);setScanStatus(`Recognition failed: ${err.message}. You can type the printed ID manually.`);}}
     finally{scanner.busy=false;updateScanButtons();}
   }
@@ -347,7 +452,7 @@
       <div class="scan-fields-two"><label>Copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Storage location<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
       <label>Optional note / position<input class="field" name="slot" maxlength="100" value="${escapeHtml(scanner.lastSlot)}" placeholder="Optional" /></label></div>
       <p class="hint">When a foil or alternate art cannot be identified, try a different photo or choose the printing. Recognition still relies on OCR; exact artwork matching is not automatic yet.</p>
-      <div class="scan-result-actions"><button class="button btn-outline" type="button" data-action="scan-again">Scan again</button><button class="button btn-primary" type="submit">＋ Save & next card</button></div>
+      <div class="scan-result-actions"><button class="button btn-outline" type="button" data-action="scan-again">↻ Scan again</button><button class="button btn-primary" type="submit">＋ Save & next card</button></div>
     </form>`);
   }
   function syncScanCard(){
@@ -712,7 +817,7 @@
       const remote=normalizeData(data.document||{});
       sync.revision=Number(data.revision);
       if(isEmptyCollection(state.data)||JSON.stringify(remote)===JSON.stringify(state.data)){
-        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;syncStatus('Shared vault loaded · revision '+sync.revision);render();
+        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));sync.ready=true;syncStatus('Shared vault loaded · revision '+sync.revision);if(state.view!=='scan')render();
       } else {showCloudChoice(remote);syncStatus('Choose which collection to keep');}
     }catch(err){syncStatus('Cloud connection error: '+(err.message||String(err)));toast('Cloud connection failed. Local cards remain saved.',true);}
     finally{sync.connecting=false;}
@@ -817,9 +922,11 @@
       item.qty+=action==='plus'?1:-1;item.updatedAt=dateNow();persist();render();return;
     }
     if(action==='start-camera'){startCamera();return;}
+    if(action==='flip-camera'){flipCamera();return;}
+    if(action==='toggle-auto'){toggleAuto();return;}
     if(action==='stop-camera'){stopCamera();updateScanButtons();setScanStatus('Camera stopped. You can start it again or choose a photo.');return;}
     if(action==='capture-card'){captureCard();return;}
-    if(action==='scan-again'){scanner.busy=false;setScanResult('');setScanStatus('Ready for another card. Hold its printed code in focus.');updateScanButtons();return;}
+    if(action==='scan-again'){scanner.autoPaused=false;scanner.autoIgnoreId='';scanner.scanToken++;clearAutoProgress();setScanResult('');setScanStatus(scanner.autoEnabled?'Looking for the next card automatically…':'Ready for another card. Use Capture once.');updateScanButtons();scheduleAutoScan(400);return;}
     if(action==='confirm-restore'){
       const inp=document.querySelector('#restoreFile');const file=inp?.files?.[0];if(!file){toast('Choose a JSON file first.',true);return;}
       if(file.size>20*1024*1024){toast('File is too large (max 20 MB).',true);return;}
@@ -859,7 +966,8 @@
       if(addCopies(id,name,qty,loc,slot,'',known?.rarity||'',known?.colors||'',false)){
         scanner.lastLocationId=loc;scanner.lastSlot=slot;scanner.saved+=qty;
         const count=document.querySelector('#scanSaved');if(count)count.textContent=fmt(scanner.saved);
-        setScanResult('');setScanStatus(`Saved ${qty} × ${id} (${name}). Ready to scan the next card.`);updateScanButtons();
+        scanner.autoPaused=false;scanner.autoIgnoreId=id;scanner.autoClearFrames=0;scanner.autoHistory=[];
+        setScanResult('');setScanStatus(`Saved ${qty} × ${id} (${name}). Remove this card and present the next one.`);updateScanButtons();scheduleAutoScan(1300);
         toast(`Saved ${qty} × ${id}.`);
       }return;
     }
@@ -974,7 +1082,7 @@
     }catch(err){state.catalog=fallbackCards;state.loaded=false;state.catalogError=err.message;
       catalogStatus.textContent='Catalog offline · limited search';catalogStatus.className='source-status offline';
       toast('Full card catalog unavailable. Saved inventory and decks still work.',true);
-    }finally{clearTimeout(timeout);render();}
+    }finally{clearTimeout(timeout);if(state.view!=='scan')render();}
   }
   render();loadCatalog();
   try {sync.config=JSON.parse(localStorage.getItem(CLOUD_KEY)||'null');if(sync.config?.url&&sync.config?.key)connectCloud();}catch(err){console.warn('Cloud config unreadable',err);}
