@@ -1,1 +1,1 @@
-Grand Line Vault 1.1.3 — Single-step scanning + safer shared cloud sync + Pastel theme
+Grand Line Vault 1.1.5 — password login, set/change password from signed-in session, keep cloud data and decks

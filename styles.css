@@ -249,3 +249,12 @@ a{color:#915575}
   .scan-modal .scan-popup-match{gap:12px}
   .scan-modal h2{font-size:23px;margin-bottom:13px}
 }
+
+/* v1.1.5: password sign-in and account management */
+.auth-password-form{display:grid;gap:12px;max-width:480px;margin:15px 0 20px}
+.auth-password-form label{display:grid;gap:7px;font-weight:700;font-size:13px;color:#586078}
+.auth-password-form button{justify-self:start}
+.auth-legacy{border:1px solid #e9dce4;background:#f9f6f9;padding:14px 16px;border-radius:12px;margin:20px 0}
+.auth-legacy summary{font-weight:700;color:#926589;cursor:pointer}
+.auth-legacy form{margin:14px 0}
+@media(max-width:690px){.auth-password-form button{justify-self:stretch}}

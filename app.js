@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.1.3 — One Piece TCG collection + deck planner.
+/* Grand Line Vault v1.1.5 — One Piece TCG collection + deck planner.
    Local-first data with optional user-owned Supabase cloud sync. */
 (() => {
   'use strict';
@@ -110,7 +110,7 @@
   const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
   const CLOUD_ANCHOR_KEY = 'grand-line-vault-cloud-anchor-v1';
-  const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null,anchor:null,remotePending:null,pending:false,diagnostic:'Not checked',lastSuccess:null};
+  const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null,anchor:null,remotePending:null,pending:false,diagnostic:'Not checked',lastSuccess:null,pendingEmail:''};
   // An anchor records the last successfully synced document on THIS device.
   // It allows us to distinguish untouched cached data from offline edits, and
   // remote edits from local edits, without silently discarding anything.
@@ -900,11 +900,38 @@
   function snapshotFilters(){return {query:state.query,color:state.color,set:state.set,filters:{...state.filters,costs:[...state.filters.costs]}};}
   function applySavedPreset(p){state.query=p.query;state.color=p.color;state.set=p.set;state.filters={...p.filters,costs:new Set(p.filters.costs)};state.perPage=48;render();}
   function cloudView(){const configured=Boolean(sync.config);const signedIn=Boolean(sync.user);
-    return pageHeading('PRIVATE FRIENDS-ONLY COLLECTION','Shared cloud synchronization','Approved friends use separate email logins but share the same numbered boxes, inventory, filters and deck plans.')+
-      `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p><p class="hint"><strong>Source of truth: Supabase shared vault.</strong> This browser has a separate local copy. Changes made offline are not visible on other devices until uploaded. Each device checks cloud updates when it becomes active; conflicting changes require a choice and should be backed up first.</p><div class="sync-inspector"><strong>Local:</strong> ${fmt(state.data.entries.reduce((n,e)=>n+e.qty,0))} cards · ${state.data.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${state.data.decks.length} decks<br><strong>Cloud:</strong> ${escapeHtml(sync.diagnostic)}<br><strong>Last saved:</strong> ${escapeHtml(sync.lastSuccess?sync.lastSuccess.toLocaleString():'Not confirmed in this session')}</div>${signedIn?`<button class="button btn-primary" type="button" data-action="cloud-diagnose">Check cloud counts / reconcile</button>`:''}
-      <form data-form="cloud-config"><div class="form-fields"><label>Supabase project URL<input class="field" type="url" name="url" placeholder="https://yourproject.supabase.co" value="${escapeHtml(sync.config?.url||'')}" required></label><label>Supabase publishable (anon) key<input class="field" name="key" placeholder="sb_publishable_..." value="${escapeHtml(sync.config?.key||'')}" required></label></div><p class="hint">Never paste a Supabase service_role or secret key into this app.</p><button type="submit" class="button btn-outline">${configured?'Update connection':'Connect Supabase'}</button></form>
-      ${configured?`<hr/><form data-form="cloud-login"><label>Email for a magic sign-in link<input class="field" type="email" name="email" required placeholder="you@example.com"></label><div class="actions"><button type="submit" class="button btn-primary">Email me a sign-in link</button>${signedIn?`<button class="button btn-outline" data-action="cloud-refresh" type="button">Refresh from cloud</button><button class="button btn-ghost" data-action="cloud-signout" type="button">Sign out</button>`:''}</div></form>`:''}
-      <p class="hint">${signedIn?`Signed in: ${escapeHtml(sync.user.email||'Account')} · `:''}${sync.ready?'Automatic sync enabled.':'Local mode remains available even without a cloud connection.'}</p></section>`;
+    const accountPanel=signedIn?`
+      <p class="hint"><strong>Signed in as ${escapeHtml(sync.user.email||'your account')}</strong>. Your password and existing shared-vault permissions belong to this same Supabase account.</p>
+      <div class="actions"><button class="button btn-outline" data-action="cloud-refresh" type="button">Refresh from cloud</button><button class="button btn-ghost" data-action="cloud-signout" type="button">Sign out of this device</button></div>
+      <hr/><h3>Set or change your password</h3><p class="hint">If you previously used an email code, create a password here while signed in. Afterward, use it on both phone and laptop. No login email is sent for normal password sign-ins.</p>
+      <form data-form="cloud-set-password" class="auth-password-form">
+        <label>New password<input class="field" type="password" name="password" required minlength="12" maxlength="200" autocomplete="new-password" placeholder="At least 12 characters" /></label>
+        <label>Repeat new password<input class="field" type="password" name="confirm" required minlength="12" maxlength="200" autocomplete="new-password" placeholder="Repeat new password" /></label>
+        <button type="submit" class="button btn-primary">Save my password</button>
+      </form>
+      <p class="hint">Use a unique password. If Supabase requires additional reauthentication, its error message will tell you. Your decks and collection are not affected.</p>
+    `:`
+      <hr/><h3>Sign in with email and password</h3>
+      <p class="hint">Enter the email approved for this shared vault and your password. No email verification code is needed for normal logins.</p>
+      <form data-form="cloud-password-login" class="auth-password-form">
+        <label>Email<input class="field" type="email" name="email" required autocomplete="username" placeholder="you@example.com" value="${escapeHtml(sync.pendingEmail||'')}" /></label>
+        <label>Password<input class="field" type="password" name="password" required autocomplete="current-password" placeholder="Your password" /></label>
+        <button class="button btn-primary" type="submit">Sign in</button>
+      </form>
+      <details class="auth-legacy"><summary>Existing account without a password? Use an email code once</summary>
+        <p class="hint">Only use this to enter an existing account and set its password above. Supabase email rate limits still apply; if emails are blocked, wait for the limit to reset or configure your own SMTP provider. Don't create a duplicate account.</p>
+        <form data-form="cloud-login" class="auth-password-form"><label>Approved email<input class="field" type="email" name="email" value="${escapeHtml(sync.pendingEmail||'')}" autocomplete="email" required placeholder="you@example.com" /></label><button type="submit" class="button btn-outline">Send one-time code</button></form>
+        <form data-form="cloud-verify" class="auth-password-form"><label>Same email<input class="field" type="email" name="email" value="${escapeHtml(sync.pendingEmail||'')}" autocomplete="email" required placeholder="you@example.com" /></label><label>Code from email<input class="field" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8" required placeholder="6–8 digit code" /></label><button class="button btn-outline" type="submit">Verify code and sign in</button></form>
+      </details>
+    `;
+    return pageHeading('PRIVATE FRIENDS-ONLY COLLECTION','Shared cloud synchronization','Approved friends use their own accounts and passwords, sharing the same boxes, inventory and deck plans.')+
+      `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p>
+       <p class="hint"><strong>Source of truth: Supabase shared vault.</strong> This browser also keeps a local copy. Changes from other devices aren't necessarily instant; conflicts require you to choose carefully and should be backed up first.</p>
+       <div class="sync-inspector"><strong>Local:</strong> ${fmt(state.data.entries.reduce((n,e)=>n+e.qty,0))} cards · ${state.data.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${state.data.decks.length} decks<br><strong>Cloud:</strong> ${escapeHtml(sync.diagnostic)}<br><strong>Last saved:</strong> ${escapeHtml(sync.lastSuccess?sync.lastSuccess.toLocaleString():'Not confirmed in this session')}</div>
+       ${signedIn?`<button class="button btn-primary" type="button" data-action="cloud-diagnose">Check cloud counts / reconcile</button>`:''}
+       <form data-form="cloud-config"><div class="form-fields"><label>Supabase project URL<input class="field" type="url" name="url" placeholder="https://yourproject.supabase.co" value="${escapeHtml(sync.config?.url||'')}" required></label><label>Supabase publishable (anon) key<input class="field" name="key" placeholder="sb_publishable_..." value="${escapeHtml(sync.config?.key||'')}" required></label></div><p class="hint">Never paste a Supabase secret or service_role key into this app.</p><button type="submit" class="button btn-outline">${configured?'Update connection':'Connect Supabase'}</button></form>
+       ${configured?accountPanel:'<p class="hint">Configure your Supabase connection first, then sign in with your approved email and password.</p>'}
+       <p class="hint">${signedIn?`Signed in: ${escapeHtml(sync.user.email||'Account')} · `:''}${sync.ready?'Automatic sync enabled.':'Local mode remains available if cloud is not connected.'}</p></section>`;
   }
   function showCloudChoice(remote){
     sync.ready=false;
@@ -959,12 +986,12 @@
       const sdk=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
       sync.client=sdk.createClient(sync.config.url,sync.config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
       sync.client.auth.onAuthStateChange((event,session)=>{
-        if(event==='SIGNED_OUT'){sync.ready=false;sync.user=null;sync.revision=null;syncStatus('Signed out · local data remains');return;}
+        if(event==='SIGNED_OUT'){sync.ready=false;sync.user=null;sync.revision=null;syncStatus('Signed out · local data remains');if(state.view==='cloud')render();return;}
         if(session?.user && session.user.id!==sync.user?.id){sync.user=session.user;setTimeout(()=>establishCloud(),0);}
       });
       const {data:{user},error}=await sync.client.auth.getUser();
       if(error&&error.name!=='AuthSessionMissingError')throw error;
-      if(user){sync.user=user;await establishCloud();}else syncStatus('Configured. Sign in by email to enable sync.');
+      if(user){sync.user=user;await establishCloud();}else syncStatus('Configured. Sign in with your password to enable sync.');
     }catch(err){syncStatus('Cloud client error: '+(err.message||String(err)));}
   }
   function downloadBackup() {
@@ -1008,7 +1035,7 @@
       sync.remotePending=null;sync.ready=true;closeModal();sendCloudSave();render();return;
     }
     if(action==='cloud-refresh'||action==='cloud-diagnose'){establishCloud({fromButton:true});return;}
-    if(action==='cloud-signout'){sync.client?.auth.signOut();return;}
+    if(action==='cloud-signout'){sync.client?.auth.signOut({scope:'local'}).catch(err=>toast('Sign-out failed: '+err.message,true));return;}
     if(action==='clear-filters'){
       state.query='';state.set='all';state.color='all';state.perPage=48;
       state.filters={effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false};render();return;
@@ -1082,10 +1109,56 @@
       }
       sync.config={url:url.replace(/\/$/,''),key};localStorage.setItem(CLOUD_KEY,JSON.stringify(sync.config));connectCloud();render();return;
     }
+    if(type==='cloud-password-login'){
+      if(!sync.client){toast('Configure Supabase first.',true);return;}
+      const email=String(f.get('email')||'').trim().toLowerCase();
+      const password=String(f.get('password')||'');
+      if(!email||!password){toast('Enter your email and password.',true);return;}
+      sync.pendingEmail=email;
+      sync.client.auth.signInWithPassword({email,password}).then(async ({data,error})=>{
+        if(error){toast('Sign-in failed: '+error.message,true);return;}
+        if(!data?.user){toast('Sign-in did not return a user.',true);return;}
+        sync.user=data.user;
+        toast('Signed in. Checking the shared collection…');
+        await establishCloud({fromButton:true});
+        if(state.view==='cloud')render();
+      }).catch(err=>toast('Sign-in failed: '+err.message,true));return;
+    }
+    if(type==='cloud-set-password'){
+      if(!sync.client||!sync.user){toast('Sign in first to set a password.',true);return;}
+      const password=String(f.get('password')||'');
+      const confirmPassword=String(f.get('confirm')||'');
+      if(password.length<12||password.length>200){toast('Use a password of at least 12 characters.',true);return;}
+      if(password!==confirmPassword){toast('The passwords do not match.',true);return;}
+      sync.client.auth.updateUser({password}).then(({error})=>{
+        if(error){toast('Could not set password: '+error.message,true);return;}
+        form.reset();toast('Password saved. You can use it to sign in on your other devices.');
+      }).catch(err=>toast('Could not set password: '+err.message,true));return;
+    }
     if(type==='cloud-login'){
       if(!sync.client){toast('Configure Supabase first.',true);return;}
-      const email=String(f.get('email')||'').trim();
-      sync.client.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}}).then(({error})=>{if(error)toast(error.message,true);else toast('Check your email for the sign-in link.');});return;
+      const email=String(f.get('email')||'').trim().toLowerCase();
+      if(!email){toast('Enter your email address.',true);return;}
+      sync.pendingEmail=email;
+      sync.client.auth.signInWithOtp({email,options:{shouldCreateUser:false}}).then(({error})=>{
+        if(error){toast('Could not send login code: '+error.message,true);return;}
+        if(state.view==='cloud')render();
+        toast('Check your email for the login code. Return here to enter it.');
+      }).catch(err=>toast('Sign-in error: '+err.message,true));return;
+    }
+    if(type==='cloud-verify'){
+      if(!sync.client){toast('Configure Supabase first.',true);return;}
+      const email=String(f.get('email')||sync.pendingEmail||'').trim().toLowerCase();
+      const token=String(f.get('token')||'').trim();
+      if(!email || !/^\d{6,8}$/.test(token)){toast('Enter the same email and your 6–8 digit code.',true);return;}
+      sync.client.auth.verifyOtp({email,token,type:'email'}).then(async ({data,error})=>{
+        if(error){toast('Code not accepted: '+error.message,true);return;}
+        if(!data?.user){toast('Supabase did not return a signed-in user.',true);return;}
+        sync.pendingEmail='';sync.user=data.user;
+        toast('Signed in. Checking the shared vault…');
+        await establishCloud({fromButton:true});
+        if(state.view==='cloud')render();
+      }).catch(err=>toast('Code verification failed: '+err.message,true));return;
     }
     if(type==='new-deck'){
       const name=String(f.get('name')||'').trim();if(!name){toast('Enter a deck name.',true);return;}
