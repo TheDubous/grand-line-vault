@@ -345,3 +345,37 @@ a{color:#915575}
   .headerline h1{font-size:29px}
   .scanner-panel{padding:12px}
 }
+
+/* v1.2.3 — two *independent* OCR windows; no misleading whole-card corners.
+   These regions are measured directly by scannerGuideRect() in app.js. */
+.scan-preview .scan-ocr-target{
+ position:absolute;z-index:5;box-sizing:border-box;pointer-events:none;
+ border-radius:9px;box-shadow:0 0 0 1px rgba(9,31,45,.28);
+ background:rgba(244,209,231,.09);opacity:1;
+}
+.scan-preview .scan-name-target{
+ left:21%;top:74%;width:53%;height:10%;
+ border:2.5px dashed #f8a9cf;
+}
+.scan-preview .scan-id-target{
+ left:69%;top:83%;width:29%;height:9%;
+ border:2.5px dashed #72d9ff;background:rgba(109,211,250,.13);
+}
+.scan-preview .scan-ocr-target span{
+ position:absolute;bottom:calc(100% + 4px);left:0;
+ font-size:9px;letter-spacing:.75px;font-weight:850;
+ padding:3px 6px;border-radius:5px;color:#303649;
+ background:#ffd9ec;text-shadow:none;
+}
+.scan-preview .scan-id-target span{background:#c1ebff;color:#164960}
+.scan-preview:not(.live) .scan-ocr-target{opacity:.6}
+.scan-guide-legend i{border-color:#f8a9cf;background:#ffe6f2}
+.scan-guide-legend .id-swatch{border-color:#72d9ff;background:#d5f3ff}
+.scan-hint{font-weight:600}
+.scan-candidate-label{display:grid;gap:8px;color:#59617a;font-size:12px;font-weight:700;margin:11px 0}
+.scan-candidate-label .select{width:100%;min-width:0}
+@media(max-width:690px){
+ .scan-preview .scan-name-target{left:20%;top:74%;width:53%;height:10%}
+ .scan-preview .scan-id-target{left:69%;top:83%;width:29%;height:9%}
+ .scan-preview .scan-ocr-target span{font-size:9px}
+}

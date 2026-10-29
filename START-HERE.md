@@ -1,3 +1,9 @@
+# Already running Grand Line Vault v1.2.x?
+
+For the **v1.2.3 scanner-only update**, back up your collection, upload and commit the new HTML/JS/CSS and asset files in GitHub, and verify v1.2.3 on Safari. **Do not rerun either SQL migration file** on your existing Supabase database. The rest of this guide is retained for new installs.
+
+---
+
 # Grand Line Vault v1.2.2 — install and safe upgrade
 
 **This version is a TEST RELEASE for your existing shared Supabase project.**
@@ -78,3 +84,6 @@ In Supabase SQL Editor run `02-LOCK-OLD-CLIENTS.sql`. This revokes the old whole
 - **The old browser cache is not an editable second collection**. Supabase is authoritative.
 - Full JSON "replace the collection" is deliberately disabled in v1.2 to prevent accidental destruction; CSV import adds cards instead.
 - Don't perform a simple rollback to v1.1.5 after writing new v1.2 records: those new records won't exist in the old shared JSON document. Export a v1.2 backup and plan a recovery migration if needed.
+
+## Updating an existing v1.2.2 site to v1.2.3
+Back up your shared collection; upload these website files to the root of the same GitHub repository and commit. Check the site shows v1.2.3. **Do not run the included migration scripts again.** The Supabase database structure is unchanged.

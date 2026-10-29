@@ -1,22 +1,19 @@
-# Grand Line Vault v1.2.2
+# Grand Line Vault v1.2.3
 
-The One Piece TCG collection website for four approved friends.
+Private shared One Piece TCG inventory for up to four approved members, with live Supabase collection, password sign-in, numbered boxes, advanced filters and virtual deck plans.
 
-**Start with [START-HERE.md](START-HERE.md).** Do not overwrite the website before running the SQL migration in the original Supabase project and verifying the data counts.
+## New in v1.2.3: two OCR regions
 
-Features: cloud-first online-only editing, real-time updates, atomic inventory quantity operations, numbered boxes, advanced English catalog filters, virtual deck planner, reservations, OPTCGSim import/export, password authentication, auto/manual phone OCR with name fallback, a single card confirmation popup, and standard English card images. All scanned photos are temporary.
+- Pink **NAME** rectangle over the printed card name.
+- Blue **ID** rectangle over the bottom-right printed card number.
+- No misleading whole-card outline. The top of the card need not align with pink corners.
+- OCR reads the number first for speed. If unsuccessful, it uses the name region. A shared name with multiple IDs prompts a manual choice rather than guessing.
+- Automatic detection and manual Capture remain available; confirmation popup still allows quantity and box selection.
 
-Security: existing `vault_members` access control plus new row-level-security policies. Never put Supabase secret keys into the public GitHub repository.
+**Update from v1.2.2:** Back up cards and decks, upload the new website files to your existing GitHub Pages repository root and commit. Open `https://thedubous.github.io/grand-line-vault/?v=1.2.3` in Safari to verify. **No new SQL is needed. Do not rerun migration scripts** — the schema, existing cards, decks and accounts are unchanged.
 
-**Testing status:** Node automated tests passed with 5,200+ rows and simulated operation responses. Actual live SQL execution, Supabase RLS, photo recognition and GitHub Pages deployment must be verified by the user.
+Read [SCAN-GUIDE-v1.2.3.md](SCAN-GUIDE-v1.2.3.md) for the scanning workflow.
 
-## v1.2.2 — Camera guide correction
+The scanner has passed automated parsing, crop alignment, and browser layout tests. Its actual recognition success rate on a physical iPhone has not been measured. If a card does not scan, open OCR diagnostics and share the recognized ID and name text to tune the crops.
 
-The pink outline now matches the aspect ratio of a physical card. The blue dashed rectangle marks the primary OCR target **exactly** on the live preview; if that fails, the scanner expands the search area. Manual capture and auto scanning both use the same guide. OCR name fallback now scans the lower name area, rather than the top art. Photo uploads continue to use their own crop presets.
-
-### Updating from v1.2.0
-
-No SQL changes. Keep existing Supabase tables. Back up your inventory before deployment. Replace the website files on GitHub and commit to main. The old migration scripts are included only for documentation and **must not be rerun** on existing migrated data.
-
-## v1.2.2 camera view
-The pink frame is larger and centered; only subtle corner markers outline the full card. The blue target is smaller and follows the bottom-right printed code. **OCR uses the actual visible blue region** with fallback crops. The app and Supabase schema remain compatible with v1.2.1. The interface was visually checked on simulated phone viewports; optical recognition still needs physical-device testing.
+The included SQL files are retained for new installation/reference only; **never rerun them on an already migrated v1.2 database.**
