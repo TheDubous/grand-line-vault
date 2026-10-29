@@ -282,3 +282,66 @@ a{color:#915575}
   color:#082943;background:#c8eafa;text-shadow:none;
 }
 @media(max-width:690px){.scan-preview .scan-outline{width:auto!important;height:82%!important}}
+
+
+/* v1.2.2: cleaner iPhone camera UI. Position is measured by scannerGuideRect
+   and used to derive the real OCR crop: no image-only decoration. */
+.scan-preview .scan-outline{
+  position:absolute;
+  top:50%;left:50%;right:auto;bottom:auto;
+  transform:translate(-50%,-50%);
+  width:auto!important;height:90%!important;aspect-ratio:63 / 88;
+  max-width:92%!important;
+  border:1.5px solid rgba(245,170,202,.69);
+  border-radius:16px;
+  background:transparent;
+  box-shadow:0 0 0 999px rgba(7,16,30,.055),inset 0 0 0 1px rgba(245,170,202,.15);
+  opacity:1;
+  pointer-events:none;z-index:2;
+}
+/* Minimal corner markers make it easier to align the whole card. */
+.scan-preview .scan-outline::before{
+  content:'';position:absolute;inset:-2px;pointer-events:none;border-radius:16px;
+  background:
+    linear-gradient(#ffbfd9,#ffbfd9) top left / 32px 4px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) top left / 4px 32px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) top right / 32px 4px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) top right / 4px 32px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) bottom left / 32px 4px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) bottom left / 4px 32px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) bottom right / 32px 4px no-repeat,
+    linear-gradient(#ffbfd9,#ffbfd9) bottom right / 4px 32px no-repeat;
+}
+.scan-preview .scan-bottom-highlight{
+  position:absolute;
+  top:auto;left:auto;
+  right:2%;bottom:5%;width:38%;height:13%;
+  border:2px dashed rgba(120,222,251,.95);
+  background:rgba(123,208,241,.07);
+  border-radius:7px;
+  box-shadow:0 0 0 1px rgba(3,25,42,.14);
+}
+/* Text previously sat across the card artwork; use below-preview legend instead. */
+.scan-preview .scan-outline-label{display:none!important}
+.scan-guide-legend{
+  display:flex;gap:13px;align-items:center;flex-wrap:wrap;
+  font-size:11px;color:#657387;margin:9px 0 0;padding:0 2px;
+}
+.scan-guide-legend span{display:inline-flex;gap:6px;align-items:center}
+.scan-guide-legend i{display:inline-block;border-radius:3px;width:13px;height:13px;border:2px solid #ed91bb;flex:none}
+.scan-guide-legend .id-swatch{border:2px dashed #43b9e8;background:#d8f3ff}
+.scan-hint{font-size:12px;line-height:1.45;color:#647488;margin:5px 0 0}
+@media(max-width:690px){
+  .scan-preview .scan-outline{height:90%!important;max-width:92%!important}
+  .scan-preview{border-radius:16px}
+  .scanner-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+  .scanner-controls #scanCapture{grid-column:1/-1;grid-row:1;min-height:51px;font-size:15px}
+  .scanner-controls #scanAuto{grid-column:1;grid-row:2;min-height:40px}
+  .scanner-controls #scanFlip{grid-column:2;grid-row:2;min-height:40px}
+  .scanner-controls #scanStart{grid-column:1/-1;grid-row:3;min-height:42px}
+  .scanner-controls #scanStop{grid-column:1/-1;grid-row:3;min-height:42px}
+  .scan-preview.live ~ .scanner-controls #scanStart{display:none}
+  .scan-preview:not(.live) ~ .scanner-controls #scanStop{display:none}
+  .headerline h1{font-size:29px}
+  .scanner-panel{padding:12px}
+}

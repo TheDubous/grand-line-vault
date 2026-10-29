@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.2.1 — cloud-first shared inventory and standard-card OCR.
+/* Grand Line Vault v1.2.2 — cloud-first shared inventory and standard-card OCR.
    Existing collections migrated by 01-CREATE-AND-MIGRATE.sql. */
 (() => {
   'use strict';
@@ -228,10 +228,10 @@
 
   // Camera access requires HTTPS (such as GitHub Pages) or localhost; photo import is the fallback.
   function scanView() {
-    return pageHeading('FAST CARD ENTRY','Scan your cards','Place the whole card inside the pink frame, with its printed ID in the blue area. Auto-detect or tap Capture; confirm in one popup.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
+    return pageHeading('FAST CARD ENTRY','Scan your cards','Keep the whole card inside the pink corners. Its printed code should be near the small blue box. Auto-detect or press Capture.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
     `<div class="scanner-layout"><section class="panel scanner-panel">
-      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>Align the card edges with the pink outline and its printed number with the blue box.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">ID AREA</span></div></div>
-      <div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Auto on':'○ Auto off'}</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
+      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>Move the phone back until all four corners of the card fit inside the pink guide.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">ID AREA</span></div></div>
+      <div class="scan-guide-legend" aria-hidden="true"><span><i></i>Whole card</span><span><i class="id-swatch"></i>Printed ID</span></div><p class="scan-hint">If the card extends beyond the pink corners, move your phone farther away.</p><div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Auto on':'○ Auto off'}</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
       <label class="photo-import button btn-outline">↥ Use photo instead<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
       <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Start the camera. Detection will suggest a card automatically, or tap Capture card.</p>
       <div class="scan-session"><strong>Cards saved in this session: <span id="scanSaved">${fmt(scanner.saved)}</span></strong><span id="scanResult"></span></div>
@@ -329,7 +329,7 @@
       document.querySelector('#scanPlaceholder').hidden=true;
       document.querySelector('#scanPreview').classList.add('live');
       const actualLens=stream.getVideoTracks()[0]?.getSettings?.().facingMode;
-      setScanStatus(actualLens==='user'?'Front camera selected. Use Switch camera to try the rear lens and get sharper card text.':scanner.autoEnabled?'Automatic detection active. Align the card with the pink frame and its ID with the blue box.':'Camera ready. Use Capture once.');
+      setScanStatus(actualLens==='user'?'Front camera selected. Use Switch camera to try the rear lens and get sharper card text.':scanner.autoEnabled?'Automatic detection active. Keep the entire card inside the pink corners; look for its ID inside the blue target.':'Camera ready. Use Capture once.');
       updateScanButtons();scheduleAutoScan(600);
     }catch(err){stopCamera();setScanStatus('Could not start camera: '+(err.name==='NotAllowedError'?'permission denied. Allow camera in browser settings, or use Take / upload photo.':`${err.message || 'camera not available'}. You can still use a photo.`));updateScanButtons();}
   }
@@ -461,7 +461,11 @@
       {...focus,label:'BLUE GUIDE · exact OCR target',scale:3.5},
       expandedScanRegion(focus,.06,.045,'ID area expanded',3.1),
       expandedScanRegion(focus,.11,.085,'ID area wide',2.5),
-      {label:'whole lower card',left:.18,top:.63,width:.76,height:.34,scale:2.1}
+      (function(){
+        const card=scannerGuideRect('.scan-outline')||{left:.09,top:.05,width:.82,height:.90};
+        const left=Math.max(0,card.left+.03*card.width),top=Math.max(0,card.top+.72*card.height);
+        return {label:'lower card fallback',left,top,width:Math.min(1-left,.94*card.width),height:Math.min(1-top,.27*card.height),scale:2.3};
+      })()
     ];
     // Uploaded photos have no camera guide and may be framed differently.
     return [
@@ -504,7 +508,7 @@
     if(!video||!video.videoWidth){scheduleAutoScan(800);return;}
     const session=scanner.session, token=scanner.scanToken;
     scanner.busy=true;scanner.autoAttempt++;
-    updateScanButtons();setScanStatus('Scanning… Keep the card steady inside the pink guide, with its ID in the blue area.');
+    updateScanButtons();setScanStatus('Scanning… Hold the complete card in the pink corners.');
     try{
       const canvas=visibleCameraCanvas(video,2100);
       const worker=await getOcrWorker();
@@ -524,7 +528,7 @@
       }else if(!found){
         scanner.autoHistory.push('');scanner.autoHistory=scanner.autoHistory.slice(-4);
         if(scanner.autoIgnoreId && ++scanner.autoClearFrames>=2)scanner.autoIgnoreId='';
-        setScanStatus('Looking for card ID… Align the card with the pink frame and the number with the blue box; hold steady.');
+        setScanStatus('Looking for card ID… Keep the whole card in the pink corners and the number near the blue target; hold steady.');
       }else{
         scanner.autoClearFrames=0;
         scanner.autoHistory.push(found);scanner.autoHistory=scanner.autoHistory.slice(-4);

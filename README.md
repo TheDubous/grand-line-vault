@@ -1,4 +1,4 @@
-# Grand Line Vault v1.2.1
+# Grand Line Vault v1.2.2
 
 The One Piece TCG collection website for four approved friends.
 
@@ -10,10 +10,13 @@ Security: existing `vault_members` access control plus new row-level-security po
 
 **Testing status:** Node automated tests passed with 5,200+ rows and simulated operation responses. Actual live SQL execution, Supabase RLS, photo recognition and GitHub Pages deployment must be verified by the user.
 
-## v1.2.1 — Camera guide correction
+## v1.2.2 — Camera guide correction
 
 The pink outline now matches the aspect ratio of a physical card. The blue dashed rectangle marks the primary OCR target **exactly** on the live preview; if that fails, the scanner expands the search area. Manual capture and auto scanning both use the same guide. OCR name fallback now scans the lower name area, rather than the top art. Photo uploads continue to use their own crop presets.
 
 ### Updating from v1.2.0
 
 No SQL changes. Keep existing Supabase tables. Back up your inventory before deployment. Replace the website files on GitHub and commit to main. The old migration scripts are included only for documentation and **must not be rerun** on existing migrated data.
+
+## v1.2.2 camera view
+The pink frame is larger and centered; only subtle corner markers outline the full card. The blue target is smaller and follows the bottom-right printed code. **OCR uses the actual visible blue region** with fallback crops. The app and Supabase schema remain compatible with v1.2.1. The interface was visually checked on simulated phone viewports; optical recognition still needs physical-device testing.

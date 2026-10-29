@@ -1,4 +1,4 @@
-# Grand Line Vault v1.2.1 — install and safe upgrade
+# Grand Line Vault v1.2.2 — install and safe upgrade
 
 **This version is a TEST RELEASE for your existing shared Supabase project.**
 It has been syntax-tested and simulated with 5,200+ rows, but **has not been tested against your live Supabase project or a physical phone camera**.
@@ -50,7 +50,7 @@ from public.shared_vault where id='main';
 2. Upload the **contents of this folder** (not the folder itself; not the ZIP) to the repository root on `main`. `index.html`, `app.js`, `styles.css`, `manifest.webmanifest`, icons and `VERSION.txt` must be at the root. You may leave the SQL and docs in the repo, but **do not publish anything containing private connection credentials**.
 3. For GitHub web editing, press `.` on the repository page, replace root files with the new ones, then commit/push. Alternatively choose **Add file → Upload files**, replace matching names and commit.
 4. In **Actions** or **Settings → Pages**, verify deployment succeeded.
-5. Open https://thedubous.github.io/grand-line-vault/?v=1.2.1 on desktop Safari/Chrome and verify **Version 1.2.1** in the sidebar. Sign in if required. Then open **Cloud sync** and confirm **Live cloud ready**.
+5. Open https://thedubous.github.io/grand-line-vault/?v=1.2.2 on desktop Safari/Chrome and verify **Version 1.2.2** in the sidebar. Sign in if required. Then open **Cloud sync** and confirm **Live cloud ready**.
 6. Open it in Safari on iPhone **before** opening the Home Screen app. Check the same inventory/boxes/decks. Refresh or reinstall the Home Screen shortcut only after backing up and verifying the new version in Safari.
 
 ## Phase 3 — Test before the group starts cataloguing
