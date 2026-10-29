@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.2.0 — cloud-first shared inventory and standard-card OCR.
+/* Grand Line Vault v1.2.1 — cloud-first shared inventory and standard-card OCR.
    Existing collections migrated by 01-CREATE-AND-MIGRATE.sql. */
 (() => {
   'use strict';
@@ -228,9 +228,9 @@
 
   // Camera access requires HTTPS (such as GitHub Pages) or localhost; photo import is the fallback.
   function scanView() {
-    return pageHeading('FAST CARD ENTRY','Scan your cards','Start the camera once. Hold a card in the frame or tap Capture; confirm its artwork, quantity and box in one popup.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
+    return pageHeading('FAST CARD ENTRY','Scan your cards','Place the whole card inside the pink frame, with its printed ID in the blue area. Auto-detect or tap Capture; confirm in one popup.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
     `<div class="scanner-layout"><section class="panel scanner-panel">
-      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>The bottom-right card code must be visible and in focus.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">CARD NUMBER</span></div></div>
+      <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>Align the card edges with the pink outline and its printed number with the blue box.</small></div><div class="scan-outline" aria-hidden="true"><div class="scan-bottom-highlight"></div><span class="scan-outline-label">ID AREA</span></div></div>
       <div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><button class="button btn-outline scan-auto" type="button" id="scanAuto" data-action="toggle-auto" aria-pressed="${scanner.autoEnabled}">${scanner.autoEnabled?'● Auto on':'○ Auto off'}</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
       <label class="photo-import button btn-outline">↥ Use photo instead<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
       <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Start the camera. Detection will suggest a card automatically, or tap Capture card.</p>
@@ -298,7 +298,7 @@
   function toggleAuto(){
     scanner.autoEnabled=!scanner.autoEnabled;
     scanner.autoPaused=false;scanner.scanToken++;clearAutoProgress();scanner.autoIgnoreId='';clearAutoTimer();
-    if(scanner.autoEnabled){setScanResult('');setScanStatus(scanner.stream?'Automatic detection enabled. Hold a card steady with the bottom code uncovered.':'Automatic detection enabled. Start the camera.');scheduleAutoScan(400);}
+    if(scanner.autoEnabled){setScanResult('');setScanStatus(scanner.stream?'Automatic detection enabled. Align the card in pink and its ID in blue.':'Automatic detection enabled. Start the camera.');scheduleAutoScan(400);}
     else setScanStatus('Automatic detection paused. Use Capture once to recognize a card manually.');
     updateScanButtons();
   }
@@ -329,7 +329,7 @@
       document.querySelector('#scanPlaceholder').hidden=true;
       document.querySelector('#scanPreview').classList.add('live');
       const actualLens=stream.getVideoTracks()[0]?.getSettings?.().facingMode;
-      setScanStatus(actualLens==='user'?'Front camera selected. Use Switch camera to try the rear lens and get sharper card text.':scanner.autoEnabled?'Automatic detection active. Hold a card steady with its bottom edge uncovered.':'Camera ready. Use Capture once.');
+      setScanStatus(actualLens==='user'?'Front camera selected. Use Switch camera to try the rear lens and get sharper card text.':scanner.autoEnabled?'Automatic detection active. Align the card with the pink frame and its ID with the blue box.':'Camera ready. Use Capture once.');
       updateScanButtons();scheduleAutoScan(600);
     }catch(err){stopCamera();setScanStatus('Could not start camera: '+(err.name==='NotAllowedError'?'permission denied. Allow camera in browser settings, or use Take / upload photo.':`${err.message || 'camera not available'}. You can still use a photo.`));updateScanButtons();}
   }
@@ -362,7 +362,7 @@
     const video=document.querySelector('#scanVideo');
     if(!video||!video.videoWidth){setScanStatus('Camera is still warming up. Try again.');return;}
     clearAutoTimer();scanner.autoPaused=true;scanner.autoIgnoreId='';clearAutoProgress();
-    await recognizeCanvas(visibleCameraCanvas(video,2100));
+    await recognizeCanvas(visibleCameraCanvas(video,2100),{fromCamera:true});
   }
   async function recognizePhoto(file){
     if(!file||scanner.busy)return;
@@ -439,16 +439,40 @@
     // Favor known card IDs; names/artwork must still be manually confirmed.
     return [...ids].sort((a,b)=>Number(Boolean(catalogCard(b)))-Number(Boolean(catalogCard(a))))[0]||'';
   }
-  async function recognizeIdFrame(canvas,worker,{quick=false,attempt=0}={}){
-    // The printed number sits at bottom-right of the physical card, and the
-    // physical card is positioned inside the portrait preview guide.
-    // Alternate two focus windows because card position varies between users.
-    const regions=[
-      {label:'lower right',left:.51,top:.75,width:.40,height:.15,scale:3.5},
-      {label:'lower right shifted',left:.45,top:.68,width:.48,height:.22,scale:2.8},
-      {label:'bottom right lower',left:.49,top:.81,width:.45,height:.15,scale:3},
-      {label:'whole lower edge',left:.20,top:.66,width:.75,height:.31,scale:2.2}
+  // The blue overlay and OCR primary crop use the SAME live camera rectangle.
+  // Both getBoundingClientRect coordinates refer to the object-fit:cover preview;
+  // visibleCameraCanvas() captures those exact pixels from the video stream.
+  function scannerGuideRect(selector){
+    const frame=document.querySelector('#scanPreview'), element=document.querySelector(selector);
+    if(!frame||!element||!frame.classList?.contains('live')||!frame.getBoundingClientRect||!element.getBoundingClientRect)return null;
+    const a=frame.getBoundingClientRect(), b=element.getBoundingClientRect();
+    if(a.width<=0||a.height<=0||b.width<=0||b.height<=0)return null;
+    const left=Math.max(0,Math.min(1,(b.left-a.left)/a.width));
+    const top=Math.max(0,Math.min(1,(b.top-a.top)/a.height));
+    return {left,top,width:Math.max(.01,Math.min(1-left,b.width/a.width)),height:Math.max(.01,Math.min(1-top,b.height/a.height))};
+  }
+  function expandedScanRegion(rect,dx,dy,label,scale){
+    const left=Math.max(0,rect.left-dx),top=Math.max(0,rect.top-dy);
+    return {label,left,top,width:Math.min(1-left,rect.left+rect.width+dx-left),height:Math.min(1-top,rect.top+rect.height+dy-top),scale};
+  }
+  function scanIdRegions(fromCamera){
+    const focus=fromCamera&&scannerGuideRect('.scan-bottom-highlight');
+    if(focus)return [
+      {...focus,label:'BLUE GUIDE · exact OCR target',scale:3.5},
+      expandedScanRegion(focus,.06,.045,'ID area expanded',3.1),
+      expandedScanRegion(focus,.11,.085,'ID area wide',2.5),
+      {label:'whole lower card',left:.18,top:.63,width:.76,height:.34,scale:2.1}
     ];
+    // Uploaded photos have no camera guide and may be framed differently.
+    return [
+      {label:'photo bottom right',left:.51,top:.75,width:.40,height:.15,scale:3.5},
+      {label:'photo bottom-right expanded',left:.44,top:.67,width:.50,height:.24,scale:2.8},
+      {label:'photo lower',left:.43,top:.80,width:.53,height:.18,scale:3},
+      {label:'photo whole lower edge',left:.15,top:.63,width:.80,height:.34,scale:2.2}
+    ];
+  }
+  async function recognizeIdFrame(canvas,worker,{quick=false,attempt=0,fromCamera=false}={}){
+    const regions=scanIdRegions(fromCamera);
     const order=quick?(attempt%3===0?[2,0]:attempt%2===0?[1,0]:[0,1]):[0,1,2,3];
     let text='', candidates=[], lastRegion='';
     for(const idx of order){
@@ -480,17 +504,17 @@
     if(!video||!video.videoWidth){scheduleAutoScan(800);return;}
     const session=scanner.session, token=scanner.scanToken;
     scanner.busy=true;scanner.autoAttempt++;
-    updateScanButtons();setScanStatus('Automatic detection scanning… Keep the card still and its bottom code uncovered.');
+    updateScanButtons();setScanStatus('Scanning… Keep the card steady inside the pink guide, with its ID in the blue area.');
     try{
       const canvas=visibleCameraCanvas(video,2100);
       const worker=await getOcrWorker();
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream)return;
-      const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt});
+      const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt,fromCamera:true});
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
       setScanDiagnostics(`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no readable text)'));
       let found=bestCandidate(result.ids);
       if(!found&&state.loaded&&scanner.autoAttempt%5===0){
-        const fallback=await recognizeNameFallback(canvas,worker);found=fallback.id;
+        const fallback=await recognizeNameFallback(canvas,worker,{fromCamera:true});found=fallback.id;
         if(fallback.text)setScanDiagnostics((result.text||'')+'\nName OCR: '+fallback.text);
       }
       if(found===scanner.autoIgnoreId){
@@ -500,7 +524,7 @@
       }else if(!found){
         scanner.autoHistory.push('');scanner.autoHistory=scanner.autoHistory.slice(-4);
         if(scanner.autoIgnoreId && ++scanner.autoClearFrames>=2)scanner.autoIgnoreId='';
-        setScanStatus('Looking for a printed card ID… Move your fingers away from the bottom, get closer, and hold steady.');
+        setScanStatus('Looking for card ID… Align the card with the pink frame and the number with the blue box; hold steady.');
       }else{
         scanner.autoClearFrames=0;
         scanner.autoHistory.push(found);scanner.autoHistory=scanner.autoHistory.slice(-4);
@@ -527,17 +551,19 @@
     const matches=state.catalog.filter(c=>normalizeCardName(c.name)===name);
     return matches.length===1?matches[0].id:'';
   }
-  async function recognizeNameFallback(canvas,worker){
-    // Name text varies by card art; only use UNIQUE exact name matches as a
-    // fallback. Do not infer a different ID from color or uncertain OCR.
-    const nameCrop=ocrCrop(canvas,{left:.12,top:.08,width:.8,height:.28,scale:2.4});
+  async function recognizeNameFallback(canvas,worker,{fromCamera=false}={}){
+    // On One Piece cards, the large name is near the BOTTOM, not the top.
+    // Use the visible pink guide to find the lower name band on live camera.
+    const outline=fromCamera&&scannerGuideRect('.scan-outline');
+    const frame=outline||{left:.10,top:.07,width:.80,height:.86};
+    const nameCrop=ocrCrop(canvas,{left:frame.left+frame.width*.05,top:frame.top+frame.height*.69,width:frame.width*.90,height:frame.height*.25,scale:2.4});
     await worker.setParameters({tessedit_pageseg_mode:'11'});
     const result=await worker.recognize(nameCrop);
     const lines=String(result?.data?.text||'').split(/[\r\n]+/).map(s=>s.trim()).filter(Boolean);
     for(const line of lines){const id=findCardByName(line);if(id)return {id,text:line};}
     return {id:'',text:lines.slice(0,5).join(' | ')};
   }
-  async function recognizeCanvas(canvas){
+  async function recognizeCanvas(canvas,{fromCamera=false}={}){
     if(scanner.busy)return;
     clearAutoTimer();scanner.autoPaused=true;
     scanner.busy=true;const session=scanner.session,token=scanner.scanToken;updateScanButtons();
@@ -546,12 +572,12 @@
     try {
       const worker=await getOcrWorker();
       if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
-      const result=await recognizeIdFrame(canvas,worker);
+      const result=await recognizeIdFrame(canvas,worker,{fromCamera});
       if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
       setScanDiagnostics(`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no readable text)'));
       let id=bestCandidate(result.ids);
       if(!id && state.loaded){
-        const alt=await recognizeNameFallback(canvas,worker);id=alt.id;
+        const alt=await recognizeNameFallback(canvas,worker,{fromCamera});id=alt.id;
         setScanDiagnostics((result.text||'')+'\nCard-name fallback: '+(alt.text||'(none)'));
       }
       renderScanMatch(id,!id);

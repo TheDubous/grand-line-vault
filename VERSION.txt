@@ -1,1 +1,1 @@
-Grand Line Vault 1.2.0 — cloud-first live inventory, standard-English ID/name scanner, password login.
+Grand Line Vault 1.2.1 — cloud-first live inventory, standard-English ID/name scanner, password login.

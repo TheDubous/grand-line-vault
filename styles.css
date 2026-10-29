@@ -258,3 +258,27 @@ a{color:#915575}
 .auth-legacy summary{font-weight:700;color:#926589;cursor:pointer}
 .auth-legacy form{margin:14px 0}
 @media(max-width:690px){.auth-password-form button{justify-self:stretch}}
+
+/* v1.2.1: The visible scanner guide is aligned with the live OCR crop.
+   Card guide keeps a physical One Piece card's ~0.714 width/height ratio. */
+.scan-preview .scan-outline{
+  position:absolute;top:9%;left:50%;transform:translateX(-50%);
+  width:auto!important;height:82%!important;aspect-ratio:0.714;
+  max-width:none!important;right:auto;bottom:auto;
+  border:2px solid #ed91bb;border-radius:12px;
+  background:rgba(251,221,236,.025);box-shadow:0 0 0 999px rgba(5,20,36,.10);
+  pointer-events:none;z-index:2;opacity:.55;
+}
+.scan-preview.live .scan-outline{opacity:1}
+.scan-preview .scan-bottom-highlight{
+  position:absolute;left:49%;top:79%;width:49%;height:18%;
+  right:auto;bottom:auto;border:2px dashed #8dd9fa;
+  background:rgba(141,217,250,.14);border-radius:7px;
+}
+.scan-preview .scan-outline-label{
+  left:auto;right:0;bottom:23%;width:auto;
+  transform:none;border-radius:5px;padding:3px 6px;
+  font-size:10px;letter-spacing:.65px;font-weight:800;
+  color:#082943;background:#c8eafa;text-shadow:none;
+}
+@media(max-width:690px){.scan-preview .scan-outline{width:auto!important;height:82%!important}}
