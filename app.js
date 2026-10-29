@@ -1,11 +1,11 @@
-/* Grand Line Vault v1.1.5 — One Piece TCG collection + deck planner.
-   Local-first data with optional user-owned Supabase cloud sync. */
+/* Grand Line Vault v1.2.0 — cloud-first shared inventory and standard-card OCR.
+   Existing collections migrated by 01-CREATE-AND-MIGRATE.sql. */
 (() => {
   'use strict';
 
   const KEY = 'grand-line-vault-v1';
   const SOURCE = 'https://cdn.jsdelivr.net/gh/michalkiral/optcg-data-limitless@main/data/index/cards_by_id.json';
-  const SOURCE_BACKUP = 'https://cdn.jsdelivr.net/gh/michalkiral/optcg-data@main/data/index/cards_by_id.json';
+  const SOURCE_BACKUP = 'https://raw.githubusercontent.com/michalkiral/optcg-data-limitless/main/data/index/cards_by_id.json';
   const SOURCE_FALLBACK = 'https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json';
   const IMG_BASE = 'https://en.onepiece-cardgame.com/images/cardlist/card/';
   const app = document.querySelector('#app');
@@ -106,66 +106,88 @@
     try { const raw=localStorage.getItem(KEY); return raw ? normalizeData(JSON.parse(raw)) : initialData(); }
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:'box-1',lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:''};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
-  const CLOUD_ANCHOR_KEY = 'grand-line-vault-cloud-anchor-v1';
-  const sync = {client:null,user:null,revision:null,ready:false,busy:false,timer:null,connecting:false,lastStatus:'Local only',config:null,anchor:null,remotePending:null,pending:false,diagnostic:'Not checked',lastSuccess:null,pendingEmail:''};
-  // An anchor records the last successfully synced document on THIS device.
-  // It allows us to distinguish untouched cached data from offline edits, and
-  // remote edits from local edits, without silently discarding anything.
-  function cloudIdentity(){return `${sync.config?.url||''}|${sync.user?.id||''}`;}
-  function getCloudAnchor(){try{const a=JSON.parse(localStorage.getItem(CLOUD_ANCHOR_KEY)||'null');return a?.identity===cloudIdentity()?a:null;}catch{return null;}}
-  function writeCloudAnchor(doc,revision){
-    sync.anchor=JSON.parse(JSON.stringify(doc));sync.revision=Number(revision);sync.lastSuccess=new Date();
-    try{localStorage.setItem(CLOUD_ANCHOR_KEY,JSON.stringify({identity:cloudIdentity(),document:sync.anchor,revision:sync.revision}));}
-    catch(err){console.warn('Cloud anchor could not be saved',err);}
-    sync.pending=false;updateCloudBadge();
-  }
-  function sameData(a,b){return JSON.stringify(a)===JSON.stringify(b);}
-  function isDefaultCollection(d){
-    const v=initialData();
-    return !d.entries.length&&!d.decks.length&&!d.presets.length&&sameData(d.locations,v.locations);
-  }
-  function showSyncAlert(message){syncStatus(message);toast(message,true);updateCloudBadge();}
+
+  // v1.2: Supabase is the only editable source; localStorage is read-only cache.
+  const sync={client:null,user:null,ready:false,busy:false,connecting:false,config:null,lastStatus:'Sign in to edit',lastSuccess:null,diagnostic:'Not connected',pendingEmail:'',baseline:null,optimistic:null,queue:[],writing:false,loading:false,dirty:false,refreshTimer:null,channel:null,lastWrite:Promise.resolve(),writeError:null};
+  const copyData=d=>JSON.parse(JSON.stringify(d));
+  function syncStatus(message){sync.lastStatus=message;const el=document.querySelector('#cloudState');if(el)el.textContent=message;updateCloudBadge();}
   function updateCloudBadge(){
     const el=document.querySelector('#globalCloudStatus');if(!el)return;
-    const label=sync.ready?(sync.busy?'Saving to cloud…':'Cloud synced · r'+sync.revision):(sync.user?'Cloud not synced':'Local only');
-    el.textContent=label;el.dataset.state=sync.ready?'synced':sync.user?'warning':'local';
-    el.title=sync.lastStatus;
+    const label=sync.writing?'Saving to cloud…':sync.ready?'Cloud live · synced':sync.user?'Cloud unavailable':'Sign in · read only';
+    el.textContent=label;el.dataset.state=sync.ready?(sync.writing?'warning':'synced'):'warning';el.title=sync.lastStatus;
   }
-  
-  const isEmptyCollection = data => !data.entries.length && !data.decks.length && !(data.presets||[]).length;
-  function syncStatus(message) {sync.lastStatus=message;const el=document.querySelector('#cloudState');if(el)el.textContent=message;updateCloudBadge();}
-  function scheduleCloudSave(){
-    if(!sync.ready||!sync.user){sync.pending=true;syncStatus('Saved on this device only · cloud NOT updated. Open Cloud sync.');return;}
-    sync.pending=true;clearTimeout(sync.timer);sync.timer=setTimeout(()=>sendCloudSave(),1000);
-    syncStatus('Saved locally · uploading to cloud…');
-  }
-  async function sendCloudSave(){
-    if(!sync.ready||!sync.user||sync.busy)return;
-    sync.busy=true;updateCloudBadge();
-    const payload=JSON.parse(JSON.stringify(state.data));
-    const expected=sync.revision;
-    let success=false;
-    try{
-      const {data,error}=await sync.client.rpc('save_shared_vault',{p_document:payload,p_expected_revision:expected});
-      if(error)throw error;
-      writeCloudAnchor(payload,Number(data));
-      success=true;syncStatus('Shared vault synced · revision '+sync.revision);
-    } catch(err){
-      sync.ready=false;sync.pending=true;
-      showSyncAlert('Sync stopped: '+(err.message||'conflict')+'. Data is only local until reconciled.');
-    } finally {
-      sync.busy=false;updateCloudBadge();
-      // Edits arriving while an upload was in flight must not be silently lost.
-      if(success&&!sameData(state.data,payload))scheduleCloudSave();
+  function entryKey(e){return `${String(e.cardId).toUpperCase()}\u0000${String(e.locationId)}\u0000${String(e.slot||'').trim().toLowerCase()}`;}
+  function objectPatches(before,after,kind){
+    const a=new Map(before.map(x=>[x.id,x])),b=new Map(after.map(x=>[x.id,x]));const patches=[];
+    for(const id of new Set([...a.keys(),...b.keys()])){
+      const old=a.get(id)||null,now=b.get(id)||null;
+      if(JSON.stringify(old)!==JSON.stringify(now))patches.push({kind,id,before:old,after:now});
     }
+    return patches;
   }
-  function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify(state.data));scheduleCloudSave(); return true; }
-    catch (err) {toast('Could not save in this browser. Export a backup and check storage settings.',true);return false;}
+  function diffData(before,after){
+    const early=[],later=[];
+    for(const op of objectPatches(before.locations,after.locations,'locations'))(op.after?early:later).push(op);
+    const a=new Map(before.entries.map(x=>[entryKey(x),x])),b=new Map(after.entries.map(x=>[entryKey(x),x]));
+    const changes=[];
+    for(const key of new Set([...a.keys(),...b.keys()])){
+      const old=a.get(key),now=b.get(key);const delta=(now?.qty||0)-(old?.qty||0);
+      if(delta){const e=now||old;changes.push({kind:'inventory',cardId:e.cardId,locationId:e.locationId,slot:String(e.slot||'').trim().toLowerCase(),delta,name:e.name||e.cardId,rarity:e.rarity||'',colors:e.colors||'',note:e.note||''});}
+      if(old&&now&&['name','note','rarity','colors'].some(k=>(old[k]||'')!==(now[k]||''))){
+        const fields=e=>({name:e.name||'',note:e.note||'',rarity:e.rarity||'',colors:e.colors||''});
+        changes.push({kind:'inventory_meta',cardId:now.cardId,locationId:now.locationId,slot:String(now.slot||'').trim().toLowerCase(),before:fields(old),after:fields(now)});
+      }
+    }
+    return [...early,...changes,...later,...objectPatches(before.decks,after.decks,'decks'),...objectPatches(before.presets,after.presets,'presets')];
   }
+  function restoreCloudSnapshot(message){
+    state.data=copyData(sync.baseline||loadData());sync.optimistic=copyData(state.data);
+    if(state.view!=='scan')render();syncStatus(message);toast(message,true);
+  }
+  function canEditNow(){return !!(sync.ready&&sync.user&&navigator.onLine);}
+  function requireCloudEdit(){if(canEditNow())return true;toast('Sign in and connect to the shared cloud before changing cards or decks.',true);return false;}
+  function persist(){
+    if(!sync.ready||!sync.user||!navigator.onLine){
+      restoreCloudSnapshot('Cloud unavailable: this change was NOT saved. Reconnect before editing.');return false;
+    }
+    const before=sync.optimistic||sync.baseline||state.data,after=copyData(state.data);
+    const ops=diffData(before,after);
+    if(!ops.length)return true;
+    sync.optimistic=after;
+    for(let i=0;i<ops.length;i+=200){sync.queue.push({id:uid(),ops:ops.slice(i,i+200)});}
+    syncStatus('Saving to the shared cloud…');
+    sync.lastWrite=flushCloudQueue();
+    return true;
+  }
+  async function flushCloudQueue(){
+    if(sync.writing)return sync.currentFlush||Promise.resolve();
+    sync.writing=true;
+    sync.currentFlush=(async()=>{
+      try{
+        while(sync.queue.length){
+          const item=sync.queue[0];
+          // Supabase RPC runs the entire batch in one Postgres transaction.
+          const {error}=await sync.client.rpc('vault_v12_apply',{p_request_id:item.id,p_ops:item.ops});
+          if(error)throw error;
+          sync.queue.shift();sync.lastSuccess=new Date();
+        }
+        sync.baseline=copyData(sync.optimistic);syncStatus('All changes saved to shared cloud');sync.writeError=null;
+      }catch(err){
+        sync.writeError=err;
+        sync.ready=false;sync.queue.length=0;
+        restoreCloudSnapshot('Cloud save failed: '+(err.message||String(err))+'. Refresh before editing.');
+      }finally{
+        sync.writing=false;sync.currentFlush=null;updateCloudBadge();
+        if(sync.user)await establishCloud({silent:true});
+      }
+    })();
+    return sync.currentFlush;
+  }
+  async function waitForCloudSave(){const pending=sync.currentFlush||sync.lastWrite;await pending;return Boolean(sync.ready&&!sync.writeError);}
   function toast(message, error = false) {
     toasts.textContent=message; toasts.className=error ? 'show error' : 'show';
     clearTimeout(toast.timeout); toast.timeout=setTimeout(()=>{toasts.className='';},3900);
@@ -214,7 +236,7 @@
       <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Start the camera. Detection will suggest a card automatically, or tap Capture card.</p>
       <div class="scan-session"><strong>Cards saved in this session: <span id="scanSaved">${fmt(scanner.saved)}</span></strong><span id="scanResult"></span></div>
       <details class="scan-diagnostics"><summary>Having trouble? Open OCR diagnostics</summary><p id="scanDiagnostics">No recognition attempted yet.</p><canvas id="scanCropPreview" aria-label="Latest close-up used for OCR"></canvas></details>
-      <p class="hint">Frames are analyzed on your device. The popup uses English card catalog images. No camera photo is saved to Supabase.</p>
+      <p class="hint">Frames are analyzed on your device. The popup uses English card catalog images. Camera frames are processed temporarily and discarded.</p>
     </section></div>`;
   }
 
@@ -466,7 +488,11 @@
       const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt});
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
       setScanDiagnostics(`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no readable text)'));
-      const found=bestCandidate(result.ids);
+      let found=bestCandidate(result.ids);
+      if(!found&&state.loaded&&scanner.autoAttempt%5===0){
+        const fallback=await recognizeNameFallback(canvas,worker);found=fallback.id;
+        if(fallback.text)setScanDiagnostics((result.text||'')+'\nName OCR: '+fallback.text);
+      }
       if(found===scanner.autoIgnoreId){
         // The just-saved card is still in view. Do not immediately scan it again.
         scanner.autoClearFrames=0;scanner.autoHistory=[];
@@ -483,7 +509,7 @@
         if(hits>=needed){
           scanner.autoPaused=true;clearAutoTimer();
           renderScanMatch(found,false);
-          setScanStatus(`Detected ${found} automatically. Verify the printing and save it, or choose Scan again.`);
+          setScanStatus(`Detected ${found} automatically. Confirm the English card and box, or scan again.`);
         }else setScanStatus(`Possible ${found} (${hits}/${needed} checks). Hold steady for confirmation…`);
       }
     }catch(err){
@@ -494,6 +520,22 @@
     }finally{
       scanner.busy=false;updateScanButtons();scheduleAutoScan(850);
     }
+  }
+  function normalizeCardName(s){return String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+  function findCardByName(raw){
+    const name=normalizeCardName(raw);if(name.length<5)return '';
+    const matches=state.catalog.filter(c=>normalizeCardName(c.name)===name);
+    return matches.length===1?matches[0].id:'';
+  }
+  async function recognizeNameFallback(canvas,worker){
+    // Name text varies by card art; only use UNIQUE exact name matches as a
+    // fallback. Do not infer a different ID from color or uncertain OCR.
+    const nameCrop=ocrCrop(canvas,{left:.12,top:.08,width:.8,height:.28,scale:2.4});
+    await worker.setParameters({tessedit_pageseg_mode:'11'});
+    const result=await worker.recognize(nameCrop);
+    const lines=String(result?.data?.text||'').split(/[\r\n]+/).map(s=>s.trim()).filter(Boolean);
+    for(const line of lines){const id=findCardByName(line);if(id)return {id,text:line};}
+    return {id:'',text:lines.slice(0,5).join(' | ')};
   }
   async function recognizeCanvas(canvas){
     if(scanner.busy)return;
@@ -507,9 +549,13 @@
       const result=await recognizeIdFrame(canvas,worker);
       if(token!==scanner.scanToken||session!==scanner.session||state.view!=='scan')return;
       setScanDiagnostics(`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no readable text)'));
-      const id=bestCandidate(result.ids);
+      let id=bestCandidate(result.ids);
+      if(!id && state.loaded){
+        const alt=await recognizeNameFallback(canvas,worker);id=alt.id;
+        setScanDiagnostics((result.text||'')+'\nCard-name fallback: '+(alt.text||'(none)'));
+      }
       renderScanMatch(id,!id);
-      setScanStatus(id?'Possible ID detected — verify it and choose the right printing before saving.':'No ID found. Try more light, better focus, and an unobstructed bottom edge; or type the printed ID manually.');
+      setScanStatus(id?'Possible ID found — confirm the standard English card before saving.':'No ID found. Try more light, better focus, and an unobstructed bottom edge; or type the printed ID manually.');
     }catch(err){if(session===scanner.session&&state.view==='scan'){renderScanMatch('',true);setScanStatus(`Recognition failed: ${err.message}. You can type the printed ID manually.`);}}
     finally{scanner.busy=false;updateScanButtons();}
   }
@@ -521,7 +567,7 @@
   // Scan confirmations live in the modal layer above the camera, not in the
   // below-camera result column. Camera remains open but automatic OCR pauses.
   function scanImageHtml(id, known){
-    const src=known?.image||imageUrl(id);
+    const src=known?.image||imageUrl(baseCardId(id));
     return `<div class="scan-popup-art"><img class="scan-confirm-image" id="scanMatchImage" data-fallback-src="${escapeHtml(imageUrl(id))}" data-attempt="0" src="${escapeHtml(src)}" alt="Catalog image of ${escapeHtml(known?.name||id||'card')}"/><div class="scan-art-fallback" hidden>Card image unavailable</div></div>`;
   }
   function scanModal(content,step){
@@ -538,36 +584,35 @@
   }
   function renderScanMatch(detectedId,manual=false){
     if(state.view!=='scan')return;
-    const id=safeId(detectedId);
+    const id=baseCardId(safeId(detectedId));
     scanner.matchId=id;
     renderScanEditor(id,manual);
     setScanResult('');
   }
   function renderScanEditor(detectedId='',manual=false){
-    const id=safeId(detectedId),known=catalogCard(id),variants=variantOptions(id);
+    const id=baseCardId(safeId(detectedId)),known=catalogCard(id),variants=[];
     scanner.matchId=id;
     const pic=scanImageHtml(id,known);
     const ambiguous=!known || !known.image;
     scanModal(`<div class="scan-popup-eyebrow">${manual?'MANUAL CARD MATCH':'CARD FOUND'}</div><h2>${manual?'Enter the card number':'Is this your card?'}</h2>
       <form data-form="scan-add" class="scan-add-form">
-      <div class="scan-match-card scan-popup-match">${pic}<div><strong id="scanMatchName">${escapeHtml(known?.name||'Card not in catalog')}</strong><span id="scanMatchMeta">${escapeHtml(id||'Unknown ID')}</span><small id="scanOwnedCount">${fmt(qtyFor(id))} already owned</small>${ambiguous?'<small class="scan-art-warning">Catalog picture unavailable. Confirm the ID before saving.</small>':''}</div></div>
+      <div class="scan-match-card scan-popup-match">${pic}<div><strong id="scanMatchName">${escapeHtml(known?.name||'Card not in catalog')}</strong><span id="scanMatchMeta">${escapeHtml((id||'Unknown ID')+(known?.colors?' · '+known.colors:''))}</span><small id="scanOwnedCount">${fmt(qtyFor(id))} already owned</small>${ambiguous?'<small class="scan-art-warning">Catalog picture unavailable. Confirm the ID before saving.</small>':''}</div></div>
       <div class="scan-fields-two"><label>Copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Box<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
-      <details class="scan-advanced"><summary>Wrong ID, artwork or name? Correct card</summary><div class="form-fields"><label>Printed card ID<input id="scanCardId" class="field" name="cardId" maxlength="40" required spellcheck="false" autocapitalize="characters" placeholder="OP05-015" value="${escapeHtml(id)}" /></label>
-      <label id="scanVariantWrap" ${variants.length>1?'':'hidden'}>Exact printing<select class="select" id="scanVariantSelect">${variants.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===id?'selected':''}>${escapeHtml(c.id)} · ${escapeHtml(c.name)}</option>`).join('')}</select></label>
-      <label>Card name<input class="field" id="scanCardName" name="name" maxlength="150" value="${escapeHtml(known?.name||id)}" placeholder="Card name" /></label><label>Optional note<input class="field" name="slot" maxlength="100" value="${escapeHtml(scanner.lastSlot)}" placeholder="Optional" /></label></div></details>
+      <details class="scan-advanced"><summary>Wrong ID or name? Correct it</summary><div class="form-fields"><label>Printed card ID<input id="scanCardId" class="field" name="cardId" maxlength="40" required spellcheck="false" autocapitalize="characters" placeholder="OP05-015" value="${escapeHtml(id)}" /></label>
+      <label>Card name<input class="field" id="scanCardName" name="name" maxlength="150" value="${escapeHtml(known?.name||id)}" placeholder="Card name" /></label><label>Optional box slot<input class="field" name="slot" maxlength="100" value="${escapeHtml(scanner.lastSlot)}" placeholder="Optional" /></label></div></details>
       <div class="scan-confirm-buttons scan-save-buttons"><button class="button btn-outline" type="button" data-action="scan-reject">No · scan again</button><button class="button btn-primary" type="submit">✓ Add & next card</button></div>
       </form>`, 'edit');
     // Hidden detail controls stay in the same FORM for a one-tap positive path.
   }
   function syncScanCard(){
     const input=document.querySelector('#scanCardId');if(!input)return;
-    const id=safeId(input.value),known=catalogCard(id),variants=variantOptions(id);
+    const id=baseCardId(safeId(input.value)),known=catalogCard(id),variants=[];
     const wrap=document.querySelector('#scanVariantWrap'),select=document.querySelector('#scanVariantSelect');
     if(wrap&&select){wrap.hidden=variants.length<=1;select.innerHTML=variants.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===id?'selected':''}>${escapeHtml(c.id)} · ${escapeHtml(c.name)}</option>`).join('');}
     const name=document.querySelector('#scanCardName');if(name&&(!name.dataset.custom||name.value===name.dataset.previous)){name.value=known?.name||id;name.dataset.previous=name.value;}
     const matchName=document.querySelector('#scanMatchName'),matchMeta=document.querySelector('#scanMatchMeta'),owned=document.querySelector('#scanOwnedCount'),img=document.querySelector('#scanMatchImage');
     if(matchName)matchName.textContent=known?.name||id||'Enter card ID';
-    if(matchMeta)matchMeta.textContent=known?cardMeta(known):'Check the card number below';
+    if(matchMeta)matchMeta.textContent=(id||'Unknown ID')+(known?.colors?' · '+known.colors:'');
     if(owned)owned.textContent=`${fmt(qtyFor(id))} copies owned`;
     if(img){img.dataset.fallbackSrc=imageUrl(id);img.dataset.attempt='0';img.src=known?.image||imageUrl(id);img.alt='Catalog image of '+(known?.name||id||'card');img.hidden=false;const fallback=img.parentElement?.querySelector('.scan-art-fallback');if(fallback)fallback.hidden=true;}
   }
@@ -577,9 +622,9 @@
     const sortedLocs=[...locations].sort((a,b)=>entryCounts(b.id)-entryCounts(a.id)).slice(0,5);
     const latest=[...state.data.entries].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0,6);
     const locMarkup=sortedLocs.map(l=>`<div class="storage-row"><div class="storage-icon">${l.kind==='Binder'?'▦':l.kind==='Deck'?'♠':'▣'}</div><div class="storage-info"><strong>${escapeHtml(l.name)}</strong><small>${escapeHtml(l.kind)} · ${fmt(state.data.entries.filter(e=>e.locationId===l.id).length)} entries</small><div class="progress-track"><div class="progress-fill" style="width:${total?Math.round(100*entryCounts(l.id)/total):0}%"></div></div></div><div class="qty-tag">${fmt(entryCounts(l.id))}</div></div>`).join('');
-    return pageHeading('YOUR COLLECTION','Dashboard','A home for every card, deck, binder and storage box.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan cards</button><button class="button btn-outline" data-action="open-import" type="button">↑ Restore backup</button></div>`)+
+    return pageHeading('YOUR COLLECTION','Dashboard','One shared, cloud-saved collection.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan cards</button><button class="button btn-outline" data-action="import-inventory-csv" type="button">↑ Import CSV</button></div>`)+
     `<div class="hero"><div><div class="overline">READY TO ORGANIZE?</div><h2>Know exactly where every card lives.</h2><p>Search cards by ID or name, track duplicates, and record binder pages or box slots.</p></div><button class="button btn-primary" data-view="catalog" type="button">＋ Add cards</button></div>
-    <div class="stats"><div class="stat"><div class="stat-label">Total cards</div><div class="stat-number">${fmt(total)}</div><div class="stat-hint">Across all locations</div></div><div class="stat"><div class="stat-label">Unique printings</div><div class="stat-number">${fmt(uniqueCards())}</div><div class="stat-hint">Card ID and art variants</div></div><div class="stat"><div class="stat-label">Storage locations</div><div class="stat-number">${fmt(locations.length)}</div><div class="stat-hint">Binders, boxes and decks</div></div><div class="stat"><div class="stat-label">Inventory records</div><div class="stat-number">${fmt(state.data.entries.length)}</div><div class="stat-hint">Individual card/slot entries</div></div></div>
+    <div class="stats"><div class="stat"><div class="stat-label">Total cards</div><div class="stat-number">${fmt(total)}</div><div class="stat-hint">Across all locations</div></div><div class="stat"><div class="stat-label">Unique card IDs</div><div class="stat-number">${fmt(uniqueCards())}</div><div class="stat-hint">Standard English card numbers</div></div><div class="stat"><div class="stat-label">Storage locations</div><div class="stat-number">${fmt(locations.length)}</div><div class="stat-hint">Binders, boxes and decks</div></div><div class="stat"><div class="stat-label">Inventory records</div><div class="stat-number">${fmt(state.data.entries.length)}</div><div class="stat-hint">Individual card/slot entries</div></div></div>
     <div class="section-heading"><h2>Collection overview</h2><button class="text-button" data-view="inventory" type="button">View all cards →</button></div><div class="columns"><section class="panel"><h3>Latest inventory changes</h3>${latest.length?inventoryTable(latest,true):empty('▤','No cards yet','Use the catalog or import a decklist to add your first cards.',`<button class="button btn-primary" data-action="open-bulk">Import card list</button>`)}</section><section class="panel"><h3>Where your cards are stored</h3><div class="storage-list">${locMarkup}</div><p class="hint">Use Storage locations to create a binder, deck box, trade box, or shelf.</p><div class="actions"><button class="button btn-outline small" data-view="locations" type="button">Manage locations</button><button class="button btn-outline small" data-action="open-bulk" type="button">Import card list</button><button class="button btn-outline small" data-action="import-inventory-csv" type="button">Import CSV</button></div></section></div>`;
   }
 
@@ -625,7 +670,7 @@
     const colors=['Red','Green','Blue','Purple','Black','Yellow'];
     return pageHeading('EXPLORE','Card catalog','Find cards by exact cost, crew, power, counter and effect text, then save them to your collection.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan card</button><button class="button btn-outline" data-action="open-custom">＋ Manual card</button></div>`)+
     `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select><select class="select" id="catalogColor" aria-label="Filter color"><option value="all">All colors</option>${colors.map(c=>`<option value="${c}" ${c===state.color?'selected':''}>${c}</option>`).join('')}</select></div>
-    ${advancedFilters()}<div class="catalog-info"><span id="catalogCount"></span><span>Data: English third-party catalog · Card artwork belongs to its owners.</span></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
+    ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
   }
 
   function normalizeEffect(value) {return String(value??'').toLowerCase().replace(/\b(one|two|three|four)\b/g,w=>({one:'1',two:'2',three:'3',four:'4'}[w])).replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
@@ -800,7 +845,7 @@
     }
     persist(); if(renderAfter)render(); return true;
   }
-  function catalogCard(id) {return state.catalog.find(c=>c.id===id);}
+  function catalogCard(id) {return state.catalog.find(c=>c.id===baseCardId(id));}
   function addCopies(cardId, name, qty, locationId, slot='', note='',rarity='',colors='',renderAfter=true) {
     const c=catalogCard(cardId);
     return upsert({id:uid(),cardId,name:name || c?.name || cardId,qty,locationId,slot,note,rarity:rarity||c?.rarity||'',colors:colors||c?.colors||'',updatedAt:dateNow()},renderAfter);
@@ -901,7 +946,7 @@
   function applySavedPreset(p){state.query=p.query;state.color=p.color;state.set=p.set;state.filters={...p.filters,costs:new Set(p.filters.costs)};state.perPage=48;render();}
   function cloudView(){const configured=Boolean(sync.config);const signedIn=Boolean(sync.user);
     const accountPanel=signedIn?`
-      <p class="hint"><strong>Signed in as ${escapeHtml(sync.user.email||'your account')}</strong>. Your password and existing shared-vault permissions belong to this same Supabase account.</p>
+      <p class="hint"><strong>Signed in as ${escapeHtml(sync.user.email||'your account')}</strong>. Your password and membership are unchanged from v1.1.5.</p>
       <div class="actions"><button class="button btn-outline" data-action="cloud-refresh" type="button">Refresh from cloud</button><button class="button btn-ghost" data-action="cloud-signout" type="button">Sign out of this device</button></div>
       <hr/><h3>Set or change your password</h3><p class="hint">If you previously used an email code, create a password here while signed in. Afterward, use it on both phone and laptop. No login email is sent for normal password sign-ins.</p>
       <form data-form="cloud-set-password" class="auth-password-form">
@@ -924,75 +969,95 @@
         <form data-form="cloud-verify" class="auth-password-form"><label>Same email<input class="field" type="email" name="email" value="${escapeHtml(sync.pendingEmail||'')}" autocomplete="email" required placeholder="you@example.com" /></label><label>Code from email<input class="field" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8" required placeholder="6–8 digit code" /></label><button class="button btn-outline" type="submit">Verify code and sign in</button></form>
       </details>
     `;
-    return pageHeading('PRIVATE FRIENDS-ONLY COLLECTION','Shared cloud synchronization','Approved friends use their own accounts and passwords, sharing the same boxes, inventory and deck plans.')+
+    return pageHeading('PRIVATE FRIENDS-ONLY COLLECTION','Live shared cloud','Approved friends use one online inventory and the same deck plans.')+
       `<section class="panel"><h3>Cloud status</h3><p id="cloudState">${escapeHtml(sync.lastStatus)}</p>
-       <p class="hint"><strong>Source of truth: Supabase shared vault.</strong> This browser also keeps a local copy. Changes from other devices aren't necessarily instant; conflicts require you to choose carefully and should be backed up first.</p>
-       <div class="sync-inspector"><strong>Local:</strong> ${fmt(state.data.entries.reduce((n,e)=>n+e.qty,0))} cards · ${state.data.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${state.data.decks.length} decks<br><strong>Cloud:</strong> ${escapeHtml(sync.diagnostic)}<br><strong>Last saved:</strong> ${escapeHtml(sync.lastSuccess?sync.lastSuccess.toLocaleString():'Not confirmed in this session')}</div>
-       ${signedIn?`<button class="button btn-primary" type="button" data-action="cloud-diagnose">Check cloud counts / reconcile</button>`:''}
+       <p class="hint"><strong>Online-only editing:</strong> Supabase is authoritative. Other signed-in devices automatically reload when something changes. Local data is only a read-only cache. Set up the v1.2 SQL migration before logging in.</p>
+       <div class="sync-inspector"><strong>Loaded collection:</strong> ${fmt(state.data.entries.reduce((n,e)=>n+e.qty,0))} cards · ${state.data.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${state.data.decks.length} decks<br><strong>Cloud:</strong> ${escapeHtml(sync.diagnostic)}<br><strong>Last saved:</strong> ${escapeHtml(sync.lastSuccess?sync.lastSuccess.toLocaleString():'Not confirmed in this session')}</div>
+       ${signedIn?`<button class="button btn-primary" type="button" data-action="cloud-diagnose">Refresh shared collection</button>`:''}
        <form data-form="cloud-config"><div class="form-fields"><label>Supabase project URL<input class="field" type="url" name="url" placeholder="https://yourproject.supabase.co" value="${escapeHtml(sync.config?.url||'')}" required></label><label>Supabase publishable (anon) key<input class="field" name="key" placeholder="sb_publishable_..." value="${escapeHtml(sync.config?.key||'')}" required></label></div><p class="hint">Never paste a Supabase secret or service_role key into this app.</p><button type="submit" class="button btn-outline">${configured?'Update connection':'Connect Supabase'}</button></form>
        ${configured?accountPanel:'<p class="hint">Configure your Supabase connection first, then sign in with your approved email and password.</p>'}
-       <p class="hint">${signedIn?`Signed in: ${escapeHtml(sync.user.email||'Account')} · `:''}${sync.ready?'Automatic sync enabled.':'Local mode remains available if cloud is not connected.'}</p></section>`;
+       <p class="hint">${signedIn?`Signed in: ${escapeHtml(sync.user.email||'Account')} · `:''}${sync.ready?'Online-only edits enabled.':'Read-only until connected.'}</p></section>`;
   }
-  function showCloudChoice(remote){
-    sync.ready=false;
-    modal(`<h2>Two different collections detected</h2><p class="subhead">Your browser has saved inventory/decks, and your group shared vault has a different saved collection. We will never silently overwrite either.</p><p class="hint">Download a JSON backup first, especially if you made changes on both devices.</p><div class="actions"><button class="button btn-outline" type="button" data-action="export-backup-cloud">Download local backup</button><button class="button btn-primary" type="button" data-action="cloud-choose-remote">Use cloud collection</button><button class="button btn-danger" type="button" data-action="cloud-choose-local">Replace shared vault with local</button></div>`);
-    sync.remotePending=remote;
-  }
-  async function establishCloud({fromButton=false}={}){
-    if(!sync.client||!sync.user||sync.connecting||sync.busy||sync.remotePending)return;
-    if(scanner.dialogOpen)return;
-    sync.connecting=true;clearTimeout(sync.timer);
-    try{
-      const {data,error}=await sync.client.from('shared_vault').select('document,revision').eq('id','main').maybeSingle();
+  // Page records in batches: PostgREST defaults to 1,000 rows per response.
+  async function readTable(name){
+    const rows=[];let offset=0;
+    do{
+      const {data,error}=await sync.client.from(name).select('*').range(offset,offset+999);
       if(error)throw error;
-      if(!data)throw new Error('Not authorized for shared_vault. Check vault_members and sign-in.');
-      const remote=normalizeData(data.document&&Array.isArray(data.document.entries)?data.document:initialData());
-      const revision=Number(data.revision);
-      sync.diagnostic=`${fmt(remote.entries.reduce((n,e)=>n+e.qty,0))} cards · ${remote.locations.filter(l=>/^Box\s*\d+$/i.test(l.name)).length} numbered boxes · ${remote.decks.length} decks · revision ${revision}`;
-      const anchor=getCloudAnchor();
-      const localEqualsRemote=sameData(state.data,remote);
-      const localUnchanged=anchor&&sameData(state.data,anchor.document);
-      const remoteUnchanged=anchor&&sameData(remote,anchor.document);
-      sync.revision=revision;
-      if(localEqualsRemote||localUnchanged||isDefaultCollection(state.data)){
-        // Adopt cloud data only if local data are identical, unchanged since the
-        // last synced revision, or truly untouched defaults. Never silently
-        // discard added boxes or cards.
-        state.data=remote;localStorage.setItem(KEY,JSON.stringify(state.data));
-        writeCloudAnchor(remote,revision);sync.ready=true;
-        syncStatus('Shared vault loaded · revision '+revision);
-        if(state.view!=='scan')render();
-      }else if(remoteUnchanged){
-        // Local offline edits, with cloud unchanged, can be uploaded safely.
-        sync.ready=true;sync.pending=true;
-        syncStatus('Local changes detected; uploading to cloud…');
-        if(state.view!=='scan')render();
-        scheduleCloudSave();
-      }else{
-        // First-time conflicting local copies and simultaneous edits require
-        // an explicit user choice. Local records are NEVER thrown away here.
-        sync.ready=false;sync.pending=true;
-        showCloudChoice(remote);syncStatus('Different local/cloud data: choose safely.');
-        if(fromButton)toast('The collections differ. Back up before choosing.',true);
-      }
-    }catch(err){sync.ready=false;sync.pending=true;showSyncAlert('Cloud check failed: '+(err.message||String(err)));}
-    finally{sync.connecting=false;updateCloudBadge();}
+      rows.push(...(data||[]));offset+=data?.length||0;
+      if(!data||data.length<1000)break;
+      if(offset>150000)throw new Error('Too many rows in '+name);
+    }while(true);
+    return rows;
   }
-
+  async function establishCloud({fromButton=false,silent=false}={}){
+    if(!sync.client||!sync.user||sync.loading||sync.writing||sync.queue.length||scanner.dialogOpen)return;
+    if(!navigator.onLine){sync.ready=false;syncStatus('Offline: read-only cache. Reconnect to edit.');return;}
+    sync.loading=true;
+    try{
+      const [boxes,entries,decks,presets]=await Promise.all([
+        readTable('vault_v12_locations'),readTable('vault_v12_inventory'),
+        readTable('vault_v12_decks'),readTable('vault_v12_presets')
+      ]);
+      // DB keeps single per-card/box records; local format retains the same IDs
+      // and deck structures as the previous 1.1.5 app.
+      const normalized=normalizeData({version:1,
+        locations:boxes.map(x=>x.payload),
+        entries:entries.map(x=>({id:x.id,cardId:x.card_id,locationId:x.location_id,slot:x.slot,qty:x.qty,name:x.name,rarity:x.rarity,colors:x.colors,note:x.note,updatedAt:x.updated_at})),
+        decks:decks.map(x=>x.payload),presets:presets.map(x=>x.payload)
+      });
+      state.data=normalized;sync.baseline=copyData(normalized);sync.optimistic=copyData(normalized);
+      try{localStorage.setItem(KEY,JSON.stringify(normalized));}catch{}
+      sync.ready=true;sync.writeError=null;sync.lastSuccess=new Date();
+      sync.diagnostic=`${fmt(entries.reduce((n,e)=>n+e.qty,0))} copies · ${boxes.length} boxes · ${decks.length} decks`;
+      syncStatus('Live cloud ready · '+sync.diagnostic);
+      if(state.view!=='scan')render();
+      if(fromButton&&!silent)toast('Cloud collection reloaded successfully.');
+      subscribeCloud();
+    }catch(err){
+      sync.ready=false;
+      syncStatus('Cloud unavailable or v1.2 migration missing: '+(err.message||String(err)));
+      if(!silent||fromButton)toast(sync.lastStatus,true);
+    }finally{sync.loading=false;updateCloudBadge();}
+  }
+  function scheduleCloudRefresh(){
+    clearTimeout(sync.refreshTimer);
+    if(sync.writing||sync.queue.length){sync.dirty=true;return;}
+    sync.refreshTimer=setTimeout(()=>{
+      if(scanner.dialogOpen){sync.dirty=true;return;}
+      if(sync.user&&!document.hidden)establishCloud({silent:true});
+    },550);
+  }
+  function subscribeCloud(){
+    if(sync.channel||!sync.client)return;
+    let chan=sync.client.channel('grand-line-v12-live');
+    for(const table of ['vault_v12_locations','vault_v12_inventory','vault_v12_decks','vault_v12_presets']){
+      chan=chan.on('postgres_changes',{event:'*',schema:'public',table},()=>scheduleCloudRefresh());
+    }
+    sync.channel=chan.subscribe(status=>{
+      if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')syncStatus('Realtime disconnected · refresh when back online');
+    });
+  }
   async function connectCloud(){
     if(!sync.config?.url||!sync.config.key)return;
-    syncStatus('Loading Supabase client…');
+    syncStatus('Connecting to Supabase…');
     try{
+      if(sync.client&&sync.channel){await sync.client.removeChannel(sync.channel);sync.channel=null;}
       const sdk=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
       sync.client=sdk.createClient(sync.config.url,sync.config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
       sync.client.auth.onAuthStateChange((event,session)=>{
-        if(event==='SIGNED_OUT'){sync.ready=false;sync.user=null;sync.revision=null;syncStatus('Signed out · local data remains');if(state.view==='cloud')render();return;}
-        if(session?.user && session.user.id!==sync.user?.id){sync.user=session.user;setTimeout(()=>establishCloud(),0);}
+        if(event==='SIGNED_OUT'){
+          sync.ready=false;sync.user=null;sync.baseline=null;sync.optimistic=null;
+          if(sync.channel){sync.client.removeChannel(sync.channel);sync.channel=null;}
+          syncStatus('Signed out · cached collection is read-only');if(state.view==='cloud')render();return;
+        }
+        if(session?.user&&session.user.id!==sync.user?.id){sync.user=session.user;setTimeout(()=>establishCloud(),0);}
       });
       const {data:{user},error}=await sync.client.auth.getUser();
       if(error&&error.name!=='AuthSessionMissingError')throw error;
-      if(user){sync.user=user;await establishCloud();}else syncStatus('Configured. Sign in with your password to enable sync.');
-    }catch(err){syncStatus('Cloud client error: '+(err.message||String(err)));}
+      if(user){sync.user=user;await establishCloud();}
+      else syncStatus('Configured. Sign in with your email and password to edit shared cards.');
+    }catch(err){sync.ready=false;syncStatus('Cloud client error: '+(err.message||String(err)));}
   }
   function downloadBackup() {
     const blob=new Blob([JSON.stringify({...state.data,exportedAt:dateNow()},null,2)],{type:'application/json'});
@@ -1013,6 +1078,8 @@
     const nav=e.target.closest('[data-view]');if(nav){setView(nav.dataset.view);return;}
     const btn=e.target.closest('[data-action]');if(!btn)return;
     const action=btn.dataset.action, id=btn.dataset.id;
+    const writes=['add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
+    if(writes.includes(action)&&!requireCloudEdit())return;
     if(action==='add-numbered-box'){
       const used=new Set(state.data.locations.map(l=>{const m=/^box\s+(\d+)$/i.exec(l.name);return m?Number(m[1]):null}));
       let n=1;while(used.has(n))n++;state.data.locations.push({id:uid(),name:'Box '+n,kind:'Box',note:''});persist();render();toast('Created Box '+n);return;
@@ -1025,15 +1092,6 @@
     if(action==='save-filter'){const name=prompt('Name this saved filter preset:');if(!name?.trim())return;state.data.presets.push({id:uid(),name:name.trim().slice(0,80),...snapshotFilters()});persist();render();toast('Saved filter preset.');return;}
     if(action==='delete-filter'){const sel=document.querySelector('#savedFilterPreset');const p=state.data.presets.find(x=>x.id===sel?.value);if(!p){toast('Select a saved preset first.',true);return;}if(confirm(`Delete filter preset “${p.name}”?`)){state.data.presets=state.data.presets.filter(x=>x.id!==p.id);persist();render();}return;}
     if(action==='export-backup-cloud'){downloadBackup();return;}
-    if(action==='cloud-choose-remote'){
-      if(!sync.remotePending)return;
-      downloadBackup();state.data=sync.remotePending;sync.remotePending=null;localStorage.setItem(KEY,JSON.stringify(state.data));writeCloudAnchor(state.data,sync.revision);sync.ready=true;closeModal();syncStatus('Using shared collection · revision '+sync.revision);render();toast('Cloud collection loaded. Local JSON backup downloaded.');return;
-    }
-    if(action==='cloud-choose-local'){
-      if(!sync.remotePending)return;
-      if(!confirm("WARNING: this will REPLACE the entire shared cloud collection for all friends with data from this device. Other devices' additions may disappear. Have you exported a JSON backup on EVERY affected device?"))return;
-      sync.remotePending=null;sync.ready=true;closeModal();sendCloudSave();render();return;
-    }
     if(action==='cloud-refresh'||action==='cloud-diagnose'){establishCloud({fromButton:true});return;}
     if(action==='cloud-signout'){sync.client?.auth.signOut({scope:'local'}).catch(err=>toast('Sign-out failed: '+err.message,true));return;}
     if(action==='clear-filters'){
@@ -1059,7 +1117,7 @@
     if(action==='scan-edit-id'){if(scanner.dialogOpen)renderScanEditor(scanner.matchId);return;}
     if(action==='open-custom'){openAdd();return;}
     if(action==='open-bulk'){openBulk();return;}
-    if(action==='open-import'){openRestore();return;}
+    if(action==='open-import'){toast('Full backup replacement is disabled. Use CSV import or the migration instructions.',true);return;}
     if(action==='add-card'){openAdd(catalogCard(id));return;}
     if(action==='more-cards'){state.perPage+=48;paintFilterResults();return;}
     if(action==='add-location'){openLocation();return;}
@@ -1087,7 +1145,8 @@
     if(action==='stop-camera'){stopCamera();updateScanButtons();setScanStatus('Camera stopped. You can start it again or choose a photo.');return;}
     if(action==='capture-card'){captureCard();return;}
     if(action==='scan-again'){resumeScanning({message:scanner.autoEnabled?'Looking for the next card automatically…':'Ready for another card. Use Capture once.'});return;}
-    if(action==='confirm-restore'){
+    if(action==='confirm-restore'){toast('Direct backup restore is disabled in cloud-first v1.2.0 to protect the shared inventory. Contact the owner for a reviewed import.',true);return;}
+    /* if(action==='confirm-restore'){
       const inp=document.querySelector('#restoreFile');const file=inp?.files?.[0];if(!file){toast('Choose a JSON file first.',true);return;}
       if(file.size>20*1024*1024){toast('File is too large (max 20 MB).',true);return;}
       file.text().then(text=>{
@@ -1096,10 +1155,12 @@
         state.data=data;persist();closeModal();render();toast('Collection successfully restored.');
       }).catch(err=>toast(`Could not restore: ${err.message}`,true));return;
     }
+    */
   });
   document.addEventListener('submit',e=>{
     const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();
     const f=new FormData(form), type=form.dataset.form;
+    if(['import-deck','import-inventory-csv','new-deck','rename-deck','scan-add','add-entry','edit-entry','location','bulk'].includes(type)&&!requireCloudEdit())return;
     if(type==='import-deck'){readDeckImport(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='import-inventory-csv'){importExternalCsv(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='cloud-config'){
@@ -1166,16 +1227,21 @@
     }
     if(type==='rename-deck'){const d=selectedDeck();if(!d)return;const name=String(f.get('name')||'').trim();if(!name)return;d.name=name.slice(0,100);d.updatedAt=dateNow();persist();closeModal();render();return;}
     if(type==='scan-add'){
-      const id=safeId(f.get('cardId')),qty=qtyValue(f.get('qty')),loc=String(f.get('locationId')),slot=String(f.get('slot')||'').trim();
+      const id=baseCardId(safeId(f.get('cardId'))),qty=qtyValue(f.get('qty')),loc=String(f.get('locationId')),slot=String(f.get('slot')||'').trim();
       if(!isCardCode(id)||!qty||!locationById(loc)){toast('Check the printed card ID, quantity and location.',true);return;}
       const known=catalogCard(id),name=known?.name||String(f.get('name')||'').trim()||id;
       if(addCopies(id,name,qty,loc,slot,'',known?.rarity||'',known?.colors||'',false)){
-        scanner.lastLocationId=loc;scanner.lastSlot=slot;scanner.saved+=qty;
-        scanner.dialogOpen=false;scanner.matchId='';closeModal();
-        const count=document.querySelector('#scanSaved');if(count)count.textContent=fmt(scanner.saved);
-        scanner.autoPaused=false;scanner.autoIgnoreId=id;scanner.autoClearFrames=0;scanner.autoHistory=[];
-        setScanResult('');setScanStatus(`Saved ${qty} × ${id} (${name}). Remove this card and present the next one.`);updateScanButtons();scheduleAutoScan(1300);
-        toast(`Saved ${qty} × ${id}.`);
+        scanner.lastLocationId=loc;localStorage.setItem(SCANNER_BOX_KEY,loc);scanner.lastSlot=slot;
+        setScanStatus('Saving card to shared cloud…');
+        const saveButton=form.querySelector('button[type=submit]');if(saveButton)saveButton.disabled=true;
+        waitForCloudSave().then(ok=>{
+          if(!ok){if(saveButton)saveButton.disabled=false;toast('Card was NOT saved. Check Cloud sync and retry.',true);return;}
+          scanner.saved+=qty;scanner.dialogOpen=false;scanner.matchId='';closeModal();
+          const count=document.querySelector('#scanSaved');if(count)count.textContent=fmt(scanner.saved);
+          scanner.autoPaused=false;scanner.autoIgnoreId=id;scanner.autoClearFrames=0;scanner.autoHistory=[];
+          setScanResult('');setScanStatus(`Cloud saved ${qty} × ${id} (${name}). Remove this card and present the next one.`);updateScanButtons();scheduleAutoScan(1300);
+          toast(`Cloud saved ${qty} × ${id}.`);establishCloud({silent:true});
+        });
       }return;
     }
     if(type==='add-entry'){
@@ -1239,6 +1305,7 @@
     const map={catalogCategory:'category',catalogRarity:'rarity',catalogAttribute:'attribute',catalogCounter:'counter',catalogSort:'sort',catalogEffectMode:'effectMode',catalogEffectTarget:'effectTarget',catalogTraitMode:'traitMode',catalogOwned:'ownedOnly',catalogNoVariants:'hideVariants'};
     if(e.target.id in map){state.filters[map[e.target.id]]=e.target.type==='checkbox'?e.target.checked:e.target.value;state.perPage=48;paintFilterResults();}
     if(e.target.id==='activeDeck'){state.activeDeckId=e.target.value;render();}
+    if(e.target.id==='reserveDeck'&&!requireCloudEdit()){e.target.checked=!e.target.checked;return;}
     if(e.target.id==='reserveDeck'){const d=selectedDeck();if(d){d.reserved=e.target.checked;d.updatedAt=dateNow();persist();render();}}
     if(e.target.id==='savedFilterPreset'){const p=state.data.presets.find(x=>x.id===e.target.value);if(p)applySavedPreset(p);}
     if(e.target.id==='inventoryLocation'){state.inventoryLocation=e.target.value;render();}
@@ -1257,7 +1324,7 @@
 
   function normalizeCatalog(source) {
     const records=Array.isArray(source)?source:Object.entries(source).map(([id,v])=>({...v,id:v?.id||id}));
-    return records.map(c=>({
+    const full=records.map(c=>({
       id:safeId(c.id||c.card_id),name:String(c.name||''),rarity:String(c.rarity||c.category||''),
       colors:Array.isArray(c.colors)?c.colors.join(' / '):String(c.colors||''),
       category:String(c.category||''),set:String(c.set||''),
@@ -1269,6 +1336,8 @@
       effect:String(c.effect||''),trigger:String(c.trigger||''),
       image:typeof c.image==='string'&&/^https:\/\//.test(c.image)?c.image:''
     })).filter(c=>validId(c.id)&&c.name).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+    const byBase=new Map();for(const c of full){const base=baseCardId(c.id);if(!byBase.has(base)||c.id===base)byBase.set(base,{...c,id:base});}
+    return [...byBase.values()].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
   }
   async function loadCatalog() {
     const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),20000);
@@ -1281,7 +1350,7 @@
       if(!source)throw lastError||new Error('Catalog unavailable');
       const cards=normalizeCatalog(source);if(cards.length<200)throw new Error('Incomplete English catalog');
       if(cards.filter(c=>c.types.length||c.effect||c.cost!==null).length<100)throw new Error('Catalog lacks detailed fields');
-      state.catalog=cards;state.loaded=true;state.catalogError='';
+      state.catalog=cards;state.loaded=true;state.catalogError='';state.catalogLoadedAt=new Date().toLocaleString();
       catalogStatus.textContent=`${fmt(cards.length)} English cards available`;catalogStatus.className='source-status ready';
       const byId=new Map(cards.map(c=>[c.id,c]));let modified=false;
       for(const entry of state.data.entries){const match=byId.get(entry.cardId);if(match&&entry.name===entry.cardId){entry.name=match.name;entry.rarity=match.rarity;entry.colors=match.colors;modified=true;}}
@@ -1292,16 +1361,13 @@
     }finally{clearTimeout(timeout);if(state.view!=='scan')render();}
   }
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden&&sync.user&&sync.client&&!sync.connecting&&!sync.busy&&!scanner.dialogOpen)establishCloud();
+    if(!document.hidden&&sync.user&&!sync.writing)establishCloud({silent:true});
   });
-  window.addEventListener('focus',()=>{
-    if(sync.user&&sync.client&&!sync.connecting&&!sync.busy&&!scanner.dialogOpen)establishCloud();
-  });
-  setInterval(()=>{
-    if(sync.user&&sync.client&&!document.hidden&&!sync.connecting&&!sync.busy&&!scanner.dialogOpen&&state.view!=='scan')establishCloud();
-  },60000);
+  window.addEventListener('focus',()=>{if(sync.user&&!sync.writing)establishCloud({silent:true});});
+  window.addEventListener('online',()=>{if(sync.user)establishCloud({silent:true});});
+  window.addEventListener('offline',()=>{sync.ready=false;syncStatus('Offline · read-only cached collection');});
+  setInterval(()=>{if(sync.user&&!document.hidden&&!sync.writing&&!scanner.dialogOpen)establishCloud({silent:true});},90000);
   render();loadCatalog();updateCloudBadge();
-  try {sync.config=JSON.parse(localStorage.getItem(CLOUD_KEY)||'null');if(sync.config?.url&&sync.config?.key)connectCloud();}catch(err){console.warn('Cloud config unreadable',err);}
-  // Make the initial catalog panel useful even before network finishes.
+  try{sync.config=JSON.parse(localStorage.getItem(CLOUD_KEY)||'null');if(sync.config?.url&&sync.config?.key)connectCloud();}catch(err){console.warn('Cloud config unreadable',err);}
   if(state.view==='catalog')paintCatalog();
 })();

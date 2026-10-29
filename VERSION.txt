@@ -1,1 +1,1 @@
-Grand Line Vault 1.1.5 — password login, set/change password from signed-in session, keep cloud data and decks
+Grand Line Vault 1.2.0 — cloud-first live inventory, standard-English ID/name scanner, password login.
