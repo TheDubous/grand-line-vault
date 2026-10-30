@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 let source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-source=source.replace('  render();loadCatalog();', '  globalThis.__pw={sync,state,cloudView};');
+source=source.replace('  render();loadCatalog();updateCloudBadge();', '  globalThis.__pw={sync,state,cloudView};');
 const actions={},elements=new Map(),store={};
 const el=(id)=>{if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',dataset:{},style:{},classList:{toggle(){},remove(){},add(){}},addEventListener(){},setAttribute(){},focus(){},querySelectorAll(){return []}});return elements.get(id)};
 class MockFormData {constructor(form){this.fields=form.fields}get(k){return this.fields[k]||''}}
