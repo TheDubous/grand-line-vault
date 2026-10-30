@@ -794,7 +794,7 @@
     const colors=['Red','Green','Blue','Purple','Black','Yellow'];
     return pageHeading('EXPLORE','Card catalog','Find cards by exact cost, crew, power, counter and effect text, then save them to your collection.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan card</button><button class="button btn-outline" data-action="open-custom">＋ Manual card</button></div>`)+
     `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select><select class="select" id="catalogColor" aria-label="Filter color"><option value="all">All colors</option>${colors.map(c=>`<option value="${c}" ${c===state.color?'selected':''}>${c}</option>`).join('')}</select></div>
-    ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
+    ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div id="catalogSelectionTools"></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
   }
 
   function normalizeEffect(value) {return String(value??'').toLowerCase().replace(/\b(one|two|three|four)\b/g,w=>({one:'1',two:'2',three:'3',four:'4'}[w])).replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
@@ -835,7 +835,8 @@
     if(state.view!=='catalog')return;
     const results=filteredCatalog();const shown=results.slice(0,state.perPage);
     document.querySelector('#catalogCount').textContent=`${fmt(results.length)} printings found ${!state.loaded?'· limited offline preview':''}`;
-    document.querySelector('#catalogGrid').innerHTML=shown.length?shown.map(c=>`<article class="card-tile"><div class="card-art"><img loading="lazy" src="${escapeHtml(c.image || imageUrl(c.id))}" alt="Artwork for ${escapeHtml(c.name)}"/><span class="art-id">${escapeHtml(c.id)}</span></div><div class="card-body"><strong title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</strong><div class="meta">${escapeHtml(cardMeta(c))}<div>Cost ${c.cost??'—'} · Power ${c.power??'—'} · Counter ${c.counter===null?'—':c.counter}</div>${c.types.length?`<div title="${escapeHtml(c.types.join(', '))}">${escapeHtml(c.types.join(' · '))}</div>`:''}</div><button type="button" class="button btn-primary small" data-action="add-card" data-id="${escapeHtml(c.id)}">＋ Add to collection</button><div class="owned">${qtyFor(c.id)?`${fmt(qtyFor(c.id))} owned`:'Not yet in your collection'}</div></div></article>`).join('') : empty('⌕','No matching cards','Try removing a filter or searching another effect.',`<button class="button btn-outline" data-action="clear-filters">Clear filters</button>`);
+    document.querySelector('#catalogSelectionTools').innerHTML=bulkSelectionTools('catalog');
+    document.querySelector('#catalogGrid').innerHTML=shown.length?shown.map(c=>`<article class="card-tile"><label class="catalog-select-label"><input type="checkbox" data-select-catalog="${escapeHtml(baseCardId(c.id))}" ${state.bulkCatalogIds.has(baseCardId(c.id))?'checked':''}> Select</label><div class="card-art"><img loading="lazy" src="${escapeHtml(c.image || imageUrl(c.id))}" alt="Artwork for ${escapeHtml(c.name)}"/><span class="art-id">${escapeHtml(c.id)}</span></div><div class="card-body"><strong title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</strong><div class="meta">${escapeHtml(cardMeta(c))}<div>Cost ${c.cost??'—'} · Power ${c.power??'—'} · Counter ${c.counter===null?'—':c.counter}</div>${c.types.length?`<div title="${escapeHtml(c.types.join(', '))}">${escapeHtml(c.types.join(' · '))}</div>`:''}</div><button type="button" class="button btn-primary small" data-action="add-card" data-id="${escapeHtml(c.id)}">＋ Add to collection</button><div class="owned">${qtyFor(c.id)?`${fmt(qtyFor(c.id))} owned`:'Not yet in your collection'}</div></div></article>`).join('') : empty('⌕','No matching cards','Try removing a filter or searching another effect.',`<button class="button btn-outline" data-action="clear-filters">Clear filters</button>`);
     document.querySelector('#catalogMore').innerHTML=shown.length<results.length?`<button class="button btn-outline" type="button" data-action="more-cards">Show more (${fmt(results.length-shown.length)} remaining)</button>`:'';
   }
 
@@ -918,15 +919,123 @@
     toast(deckTotal(d)===50?'OPTCGSim decklist exported.':'Draft deck exported (not yet 50 cards).');
   }
 
+
+  // Selection is UI-only: never saved to the collection or Supabase.
+  const MAX_BULK_RECORDS=100;
+  function inventoryFilteredRecords(){
+    const q=state.inventoryQuery.trim().toLowerCase();
+    return state.data.entries.filter(e=>(state.inventoryLocation==='all'||e.locationId===state.inventoryLocation)
+      &&(!q||`${e.cardId} ${e.name} ${e.slot} ${e.note}`.toLowerCase().includes(q)))
+      .sort((a,b)=>a.cardId.localeCompare(b.cardId,undefined,{numeric:true}));
+  }
+  function selectedPhysicalRecords(source){
+    const ids=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    return state.data.entries.filter(e=>source==='catalog'?ids.has(baseCardId(e.cardId)):ids.has(e.id));
+  }
+  function bulkSelectionTools(source){
+    const selected=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    const count=selected.size,qty=selectedPhysicalRecords(source).reduce((n,e)=>n+e.qty,0);
+    return `<div class="bulk-selection-bar" role="region" aria-label="Bulk card actions">
+      <strong>${fmt(count)} ${source==='catalog'?'card IDs':'inventory records'} selected</strong>
+      <span class="hint">${fmt(qty)} owned copies</span>
+      <button class="button btn-outline small" data-action="bulk-select-visible-${source}" type="button">Select visible (max ${MAX_BULK_RECORDS})</button>
+      <button class="button btn-ghost small" data-action="bulk-clear-${source}" type="button" ${count?'':'disabled'}>Clear</button>
+      ${source==='catalog'?'<button class="button btn-primary small" data-action="bulk-catalog-add" type="button" '+(count?'':'disabled')+'>Add selected to box</button>':''}
+      <button class="button btn-outline small" data-action="bulk-${source}-move" type="button" ${count&&qty?'':'disabled'}>Move owned copies</button>
+      <button class="button btn-danger small" data-action="bulk-${source}-delete" type="button" ${count&&qty?'':'disabled'}>Delete owned copies</button>
+    </div>`;
+  }
+  function openBulkSelection(source,action){
+    if(!requireCloudEdit())return;
+    const selected=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    if(!selected.size){toast('Select cards first.',true);return;}
+    const entries=selectedPhysicalRecords(source);
+    if(action==='add'){
+      if(source!=='catalog'||selected.size>MAX_BULK_RECORDS){toast('Select at most 100 card IDs.',true);return;}
+      modal(`<h2>Add selected cards</h2><p class="subhead">${fmt(selected.size)} card IDs · each ID receives the chosen quantity in one box.</p>
+        <form data-form="bulk-selected-add"><div class="form-fields"><label>Copies per selected ID<input class="field" name="qty" type="number" min="1" max="999" value="1" required></label>
+        <label>Destination box<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
+        <div class="modal-actions"><button type="button" class="button btn-ghost" data-action="close-modal">Cancel</button><button class="button btn-primary" type="submit">Add selected</button></div></form>`);
+      return;
+    }
+    if(!entries.length){toast('No owned copies match the selection.',true);return;}
+    if(entries.length>MAX_BULK_RECORDS){toast(`This selection affects ${fmt(entries.length)} records. Filter or select at most ${MAX_BULK_RECORDS} records per action.`,true);return;}
+    const copies=entries.reduce((n,e)=>n+e.qty,0);
+    const desc=source==='catalog'?'All owned copies of the selected card IDs, across every box, will be affected.':'Only the checked inventory records will be affected.';
+    if(action==='move'){
+      modal(`<h2>Move selected cards</h2><p class="subhead">${fmt(entries.length)} records · ${fmt(copies)} copies. ${desc}</p>
+      <form data-form="bulk-selected-move" data-source="${source}"><div class="form-fields">
+      <label>Move to box<select class="select" name="locationId" required>${locationOptions('')}</select></label>
+      <label><input type="checkbox" name="keepSlot" value="yes" checked> Keep existing position labels</label>
+      </div><p class="hint">All quantities move; decks and reservations remain unchanged. One database transaction per selection (up to 100 records).</p>
+      <div class="modal-actions"><button type="button" class="button btn-ghost" data-action="close-modal">Cancel</button><button class="button btn-primary" type="submit">Move ${fmt(copies)} copies</button></div></form>`);
+    }else if(action==='delete'){
+      modal(`<h2>Delete selected cards</h2><p class="subhead">${fmt(entries.length)} records · <strong>${fmt(copies)} physical copies</strong>. ${desc}</p>
+      <form data-form="bulk-selected-delete" data-source="${source}"><div class="form-fields"><p class="help-note">This deletes the selected owned copies from the shared cloud. Deck plans are not deleted. Download a backup beforehand.</p>
+      <label>Type DELETE to confirm<input class="field" name="confirmation" autocomplete="off" placeholder="DELETE" required></label></div>
+      <div class="modal-actions"><button type="button" class="button btn-ghost" data-action="close-modal">Cancel</button><button class="button btn-danger" type="submit">Delete ${fmt(copies)} copies</button></div></form>`);
+    }
+  }
+  async function applySelectedBulk(form){
+    const type=form.dataset.form,source=form.dataset.source||'catalog';
+    const selected=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    if(!requireCloudEdit()||sync.writing){toast('Wait for the previous cloud save to finish.',true);return;}
+    const snapshot=copyData(state.data),next=copyData(snapshot);
+    let affected=0;
+    if(type==='bulk-selected-add'){
+      if(!selected.size||selected.size>MAX_BULK_RECORDS)return;
+      const f=new FormData(form),qty=qtyValue(f.get('qty')),loc=String(f.get('locationId')||'');
+      if(!qty||qty>999||!locationById(loc)){toast('Check quantity and box.',true);return;}
+      for(const id of selected){
+        const card=baseCatalogCard(id);
+        if(!card){toast('Missing catalog card '+id,true);return;}
+        const existing=next.entries.find(e=>baseCardId(e.cardId)===id&&e.locationId===loc&&!(e.slot||''));
+        if(existing){if(existing.qty+qty>MAX_QTY){toast('Maximum copies reached for '+id,true);return;}existing.qty+=qty;existing.updatedAt=dateNow();}
+        else next.entries.push({id:uid(),cardId:id,name:card.name,qty,locationId:loc,slot:'',note:'',rarity:card.rarity||'',colors:card.colors||'',updatedAt:dateNow()});
+        affected+=qty;
+      }
+    }else{
+      const records=selectedPhysicalRecords(source);
+      if(!records.length||records.length>MAX_BULK_RECORDS){toast('Choose up to 100 owned records.',true);return;}
+      const ids=new Set(records.map(e=>e.id));
+      const copies=records.reduce((n,e)=>n+e.qty,0);
+      if(type==='bulk-selected-delete'){
+        if(String(new FormData(form).get('confirmation')||'')!=='DELETE'){toast('Type DELETE exactly to confirm.',true);return;}
+        next.entries=next.entries.filter(e=>!ids.has(e.id));affected=copies;
+      }else if(type==='bulk-selected-move'){
+        const f=new FormData(form),loc=String(f.get('locationId')||''),keepSlot=f.get('keepSlot')==='yes';
+        if(!locationById(loc)){toast('Choose a destination box.',true);return;}
+        const moving=records.filter(e=>e.locationId!==loc);
+        const movingIds=new Set(moving.map(e=>e.id));
+        next.entries=next.entries.filter(e=>!movingIds.has(e.id));
+        for(const en of moving){
+          const slot=keepSlot?String(en.slot||''):'';
+          const existing=next.entries.find(e=>e.cardId===en.cardId&&e.locationId===loc&&String(e.slot||'').toLowerCase()===slot.toLowerCase());
+          if(existing){if(existing.qty+en.qty>MAX_QTY){toast('Maximum copies reached for '+en.cardId,true);return;}existing.qty+=en.qty;existing.updatedAt=dateNow();}
+          else next.entries.push({...en,id:uid(),locationId:loc,slot,updatedAt:dateNow()});
+          affected+=en.qty;
+        }
+      }else return;
+    }
+    if(!affected){toast('Nothing to change. Selected cards are already in this box.');return;}
+    const ops=diffData(snapshot,next);
+    if(ops.length>200){toast('Too many records to update together. Narrow the selection.',true);return;}
+    state.data=next;selected.clear();persist();closeModal();render();
+    toast('Saving '+fmt(affected)+' copies to shared cloud…');
+    const ok=await waitForCloudSave();
+    if(ok)toast('Cloud saved '+fmt(affected)+' copies.');
+    else toast('Cloud save failed. Reload the shared collection before trying again.',true);
+  }
   function inventoryTable(entries, compact=false) {
-    return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Card</th><th>Location / position</th><th>Copies</th>${compact?'':'<th>Actions</th>'}</tr></thead><tbody>${entries.map(e=>`<tr><td><div class="card-cell">${miniImg(e.cardId)}<div><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.cardId)} · ${escapeHtml(e.rarity||'Card')}${reservedTotal(e.cardId)?` · Reserved ${reservedTotal(e.cardId)} across decks`:''}</small></div></div></td><td>${pill(e.locationId)}${e.slot?`<div class="hint">${escapeHtml(e.slot)}</div>`:''}</td><td>${compact?`<strong>${fmt(e.qty)}</strong>`:`<div class="quantity-ctrl"><button aria-label="Remove one copy" data-action="minus" data-id="${escapeHtml(e.id)}" type="button">−</button><strong>${fmt(e.qty)}</strong><button aria-label="Add one copy" data-action="plus" data-id="${escapeHtml(e.id)}" type="button">＋</button></div>`}</td>${compact?'':`<td><button class="button btn-outline tiny" data-action="edit-entry" data-id="${escapeHtml(e.id)}" type="button">Edit</button></td>`}</tr>`).join('')}</tbody></table></div>`;
+    const all=entries.length>0&&entries.every(e=>state.bulkInventoryIds.has(e.id));
+    return `<div class="table-wrap"><table class="data-table"><thead><tr>${compact?'':`<th><input type="checkbox" data-select-inventory-all aria-label="Select all filtered inventory records" ${all?'checked':''}></th>`}<th>Card</th><th>Location / position</th><th>Copies</th>${compact?'':'<th>Actions</th>'}</tr></thead><tbody>${entries.map(e=>`<tr>${compact?'':`<td><input type="checkbox" data-select-inventory="${escapeHtml(e.id)}" aria-label="Select ${escapeHtml(e.cardId)} in ${escapeHtml(locationById(e.locationId)?.name||'Unsorted')}" ${state.bulkInventoryIds.has(e.id)?'checked':''}></td>`}<td><div class="card-cell">${miniImg(e.cardId)}<div><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.cardId)} · ${escapeHtml(e.rarity||'Card')}${reservedTotal(e.cardId)?` · Reserved ${reservedTotal(e.cardId)} across decks`:''}</small></div></div></td><td>${pill(e.locationId)}${e.slot?`<div class="hint">${escapeHtml(e.slot)}</div>`:''}</td><td>${compact?`<strong>${fmt(e.qty)}</strong>`:`<div class="quantity-ctrl"><button aria-label="Remove one copy" data-action="minus" data-id="${escapeHtml(e.id)}" type="button">−</button><strong>${fmt(e.qty)}</strong><button aria-label="Add one copy" data-action="plus" data-id="${escapeHtml(e.id)}" type="button">＋</button></div>`}</td>${compact?'':`<td><button class="button btn-outline tiny" data-action="edit-entry" data-id="${escapeHtml(e.id)}" type="button">Edit</button></td>`}</tr>`).join('')}</tbody></table></div>`;
   }
   function inventoryView() {
-    const query=state.inventoryQuery.trim().toLowerCase();
-    const entries=state.data.entries.filter(e=>(state.inventoryLocation==='all'||e.locationId===state.inventoryLocation) && (!query || `${e.cardId} ${e.name} ${e.slot} ${e.note}`.toLowerCase().includes(query))).sort((a,b)=>a.cardId.localeCompare(b.cardId,undefined,{numeric:true}));
+    const entries=inventoryFilteredRecords();
     return pageHeading('WHAT YOU OWN','My inventory','Every physical copy stays in its numbered box; deck reservations are shown as virtual claims.',`<div class="actions"><button class="button btn-primary" type="button" data-view="scan">◎ Scan card</button><button class="button btn-outline" type="button" data-action="open-custom">＋ Add card</button></div>`)+
     `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="inventorySearch" type="search" placeholder="Find a card, position or note" value="${escapeHtml(state.inventoryQuery)}" aria-label="Search inventory" /></label><select id="inventoryLocation" class="select" aria-label="Filter by location"><option value="all">All locations</option>${locationOptions(state.inventoryLocation)}</select><button class="button btn-outline" data-action="open-bulk" type="button">↑ Import list</button><button class="button btn-outline" data-action="import-inventory-csv" type="button">↑ Import CSV</button><button class="button btn-outline" data-action="export-inventory-csv" type="button">↓ Export CSV</button></div>
     <div class="catalog-info"><span>${fmt(entries.length)} records · ${fmt(entries.reduce((n,e)=>n+e.qty,0))} copies</span><span>Tap Edit to move a card or update its binder position.</span></div>
+    ${bulkSelectionTools('inventory')}
     ${entries.length?inventoryTable(entries):empty('▤',state.data.entries.length?'No results':'Your inventory is empty',state.data.entries.length?'Try a different search or storage location.':'Search the catalog or import an OPTCGSim decklist.',`<button class="button btn-primary" data-view="catalog">Browse cards</button>`)}`;
   }
   function locationsView() {
