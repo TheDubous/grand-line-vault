@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.2.4 — fixed targets and single reliable auto OCR.
+/* Grand Line Vault v1.2.6 — robust OCR and safe bulk actions.
    Existing collections migrated by 01-CREATE-AND-MIGRATE.sql. */
 (() => {
   'use strict';
