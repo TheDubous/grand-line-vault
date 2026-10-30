@@ -1,3 +1,12 @@
+## v1.2.5 automatic scanner improvement (proposed)
+
+- Fixed NAME and ID target positions are unchanged.
+- Auto OCR first reads the focused ID area; if necessary, it tries the wider high-contrast ID crop, then two name crops.
+- Two matching **successful** readings within 8 seconds now confirm a candidate even if an intervening frame was unreadable. A different detected ID resets the candidate immediately.
+- No card is saved automatically: the same confirmation popup with box and quantity is required.
+- Manual Capture and the existing Supabase inventory/decks/login remain unchanged. No database migration.
+- On real devices, recognition time depends on OCR processing and camera focus. Please test against cards that previously needed multiple Capture taps.
+
 # Grand Line Vault v1.2.4 — Fixed Scanner + Automatic Recognition
 
 This is an **incremental website update** for an existing v1.2.x installation of Grand Line Vault. It preserves password sign-in, Supabase shared inventory, numbered boxes, deck plans and the cloud database format.
