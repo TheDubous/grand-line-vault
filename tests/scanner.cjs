@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('fs'), vm=require('vm'),path=require('path');
 let source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-source=source.replace('  render();loadCatalog();',`  globalThis.TEST={detectPrintedIds,visibleCameraCanvas,recognizeIdFrame};`);
+source=source.replace('  render();loadCatalog();updateCloudBadge();',`  globalThis.TEST={detectPrintedIds,visibleCameraCanvas,recognizeIdFrame};`);
 const actions=[];
 function newCanvas(){
  const result={width:0,height:0,getContext(){return {drawImage(...args){actions.push(args)},set imageSmoothingEnabled(v){},set imageSmoothingQuality(v){},set filter(v){}}},setAttribute(){}};
