@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'), vm=require('node:vm'),path=require('node:path');
 let source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-source=source.replace('  render();loadCatalog();','  globalThis.TEST={state,scanner,inventoryFilteredRecords,selectedPhysicalRecords,bulkSelectionTools,scanView,recognizeIdFrame,recordAutoEvidence,diffData};');
+source=source.replace('  render();loadCatalog();updateCloudBadge();','  globalThis.TEST={state,scanner,inventoryFilteredRecords,selectedPhysicalRecords,bulkSelectionTools,scanView,recognizeIdFrame,recordAutoEvidence,diffData};');
 function node(){return {classList:{toggle(){},remove(){},add(){},contains(){return false}},addEventListener(){},getContext(){return {drawImage(){}}},setAttribute(){},focus(){},dataset:{},innerHTML:'',textContent:''};}
 const doc={querySelector(){return node()},querySelectorAll(){return []},addEventListener(){},createElement(tag){if(tag==='canvas')return {width:0,height:0,getContext(){return {drawImage(){},set imageSmoothingEnabled(v){},set imageSmoothingQuality(v){},set filter(v){}}},setAttribute(){}}; throw Error(tag);}};
 const store={};const ctx={console,crypto:require('node:crypto').webcrypto,setTimeout,clearTimeout,setInterval(){},window:{addEventListener(){}},document:doc,localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v},Intl,Date,Map,Set,URL,JSON,Math,Number,String,Object,Array,Blob};
