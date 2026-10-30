@@ -1,3 +1,14 @@
+## v1.2.6 — scanner and bulk inventory (review release)
+
+- Wider NAME target: 88% of preview, unchanged fixed ID target.
+- Automatic scan is a real on/off button, remembered locally; manual Capture works when off.
+- One-frame corroboration uses a second ID OCR crop when a candidate appears, aiming to reduce repeated attempts. It may take longer per attempt on older iPhones; timing must be measured on the actual device.
+- Catalog: select multiple card IDs, add them to a chosen box, or move/delete ALL owned copies of those IDs after a clear warning.
+- Inventory: select specific records, select up to 100 filtered records, move to another numbered box or delete with explicit DELETE confirmation.
+- Every bulk write goes through existing cloud-first Supabase RPC batches. Limit is 100 affected inventory records (maximum 200 delta operations) per bulk action.
+- Deletion has no undo: export a JSON backup before testing.
+- No Supabase schema or SQL changes, no changes to decks, reservations, authentication or existing stored cards.
+
 ## v1.2.5 automatic scanner improvement (proposed)
 
 - Fixed NAME and ID target positions are unchanged.

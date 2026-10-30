@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('fs'), vm=require('vm'),path=require('path');
 let source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-source=source.replace('  render();loadCatalog();',`  globalThis.TEST={detectPrintedIds,visibleCameraCanvas,recognizeIdFrame};`);
+source=source.replace('  render();loadCatalog();updateCloudBadge();',`  globalThis.TEST={detectPrintedIds,visibleCameraCanvas,recognizeIdFrame};`);
 const actions=[];
 function newCanvas(){
  const result={width:0,height:0,getContext(){return {drawImage(...args){actions.push(args)},set imageSmoothingEnabled(v){},set imageSmoothingQuality(v){},set filter(v){}}},setAttribute(){}};
@@ -30,6 +30,7 @@ const calls=[];const worker={setParameters:async opts=>calls.push('psm'+opts.tes
 (async()=>{
  const r=await T.recognizeIdFrame(portrait,worker,{quick:true,attempt:1});
  assert.equal(r.ids[0],'OP16-113');
- assert.deepEqual(calls,['psm7','ocr']);
+ assert.deepEqual(calls,['psm7','ocr','ocr']);
+ assert.equal(r.confirmedInFrame,true,'two matching crops corroborate one captured frame');
  console.log('PASS: OCR parsing for both example cards, OCR confusing characters, promo, and portrait preview cropping; focused single-line scanner');
 })().catch(err=>{console.error(err);process.exitCode=1});

@@ -1,4 +1,4 @@
-/* Grand Line Vault v1.2.4 — fixed targets and single reliable auto OCR.
+/* Grand Line Vault v1.2.6 — robust OCR and safe bulk actions.
    Existing collections migrated by 01-CREATE-AND-MIGRATE.sql. */
 (() => {
   'use strict';
@@ -107,8 +107,9 @@
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const SCANNER_AUTO_KEY = 'grand-line-vault-auto-enabled';
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:localStorage.getItem(SCANNER_AUTO_KEY)!=='off', autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
   // v1.2: Supabase is the only editable source; localStorage is read-only cache.
@@ -228,10 +229,10 @@
 
   // Camera access requires HTTPS (such as GitHub Pages) or localhost; photo import is the fallback.
   function scanView() {
-    return pageHeading('FAST CARD ENTRY','Scan your cards','Keep the name inside the pink window and the printed code inside the blue window. Automatic recognition is always on; Capture is a backup.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
+    return pageHeading('FAST CARD ENTRY','Scan your cards','Keep the name inside the pink window and the printed code inside the blue window. Use automatic recognition, or turn Auto OFF to use only Capture card.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
     `<div class="scanner-layout"><section class="panel scanner-panel">
       <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>Align its printed name and ID with the two colored windows.</small></div><div class="scan-name-target scan-ocr-target" aria-hidden="true"><span>NAME</span></div><div class="scan-id-target scan-ocr-target" aria-hidden="true"><span>ID</span></div></div>
-      <div class="scan-guide-legend" aria-hidden="true"><span><i></i>Card name</span><span><i class="id-swatch"></i>Printed ID</span></div><p class="scan-hint">Only the name and ID need to be readable. The whole card does not have to fit inside an outline.</p><div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><span class="scan-auto-state is-on" id="scanAuto" role="status" aria-live="polite">● Automatic scan ON</span><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
+      <div class="scan-guide-legend" aria-hidden="true"><span><i></i>Card name</span><span><i class="id-swatch"></i>Printed ID</span></div><p class="scan-hint">Only the name and ID need to be readable. The whole card does not have to fit inside an outline.</p><div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><button class="button btn-outline scan-auto-state" id="scanAuto" data-action="toggle-auto" type="button" aria-pressed="${scanner.autoEnabled}">Automatic scan: ${scanner.autoEnabled?'ON':'OFF'}</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
       <label class="photo-import button btn-outline">↥ Use photo instead<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
       <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Start the camera. Detection will suggest a card automatically, or tap Capture card.</p>
       <div class="scan-session"><strong>Cards saved in this session: <span id="scanSaved">${fmt(scanner.saved)}</span></strong><span id="scanResult"></span></div>
@@ -277,7 +278,7 @@
     if(start){start.disabled=scanner.busy||!!scanner.stream;start.textContent=scanner.stream?'Camera running':'◎ Start rear camera';}
     if(stop)stop.disabled=!scanner.stream;
     if(flip)flip.disabled=!scanner.stream||scanner.busy;
-    if(auto){auto.textContent=scanner.autoEnabled?'● Automatic scanning ON':'○ Automatic scan unavailable';auto.classList.toggle('is-on',scanner.autoEnabled);}
+    if(auto){auto.textContent=scanner.autoEnabled?'● Automatic scan ON':'○ Automatic scan OFF';auto.classList.toggle('is-on',scanner.autoEnabled);auto.setAttribute('aria-pressed',String(scanner.autoEnabled));}
     const picker=document.querySelector('#scanPhoto');if(picker)picker.disabled=scanner.busy;
   }
   function clearAutoTimer(){if(scanner.autoTimer!==null){clearTimeout(scanner.autoTimer);scanner.autoTimer=null;}}
@@ -322,7 +323,7 @@
       document.querySelector('#scanPlaceholder').hidden=true;
       document.querySelector('#scanPreview').classList.add('live');
       const actualLens=stream.getVideoTracks()[0]?.getSettings?.().facingMode;
-      scanner.autoEnabled=true;setScanStatus(actualLens==='user'?'Front camera selected. Use Flip to try the rear camera for clearer text.':'Automatic scanning active. Hold the card steady for a moment. The name is pink; the ID is blue.');
+      setScanStatus(actualLens==='user'?'Front camera selected. Use Flip to try the rear camera for clearer text.':scanner.autoEnabled?'Automatic scanning active. Hold the card steady for a moment.':'Manual Capture mode. Press Capture card when the card is aligned.');
       updateScanButtons();scheduleAutoScan(400);
     }catch(err){stopCamera();setScanStatus('Could not start camera: '+(err.name==='NotAllowedError'?'permission denied. Allow camera in browser settings, or use Take / upload photo.':`${err.message || 'camera not available'}. You can still use a photo.`));updateScanButtons();}
   }
@@ -482,7 +483,7 @@
     // Automatic mode also tries a wider, higher-contrast crop on failure.
     // Successful focused reads still finish after the first region.
     const order=quick?[0,1,2]:[0,1,2,3];
-    let text='', candidates=[], lastRegion='';
+    let text='', candidates=[], lastRegion='',confirmedInFrame=false;
     for(const idx of order){
       const opts=regions[idx];
       const crop=ocrCrop(canvas,{...opts,highContrast:idx===2});
@@ -494,7 +495,18 @@
       lastRegion=opts.label;
       text+=`${opts.label}: ${line||'(none)'}\n`;
       candidates=detectPrintedIds(line);
-      if(candidates.length)break;
+      if(candidates.length){
+        if(quick&&idx<2){
+          // Verify the candidate in a second OCR crop of this same frame.
+          const verify=ocrCrop(canvas,{...regions[idx+1],highContrast:idx+1===2});
+          const second=await worker.recognize(verify);
+          const secondText=String(second?.data?.text||'').trim();
+          const secondIds=detectPrintedIds(secondText);
+          text+=`verify: ${secondText||'(none)'}\n`;
+          confirmedInFrame=secondIds.some(v=>candidates.includes(v));
+        }
+        break;
+      }
     }
     // Manual Capture can afford a fallback that searches more of the frame.
     if(!candidates.length&&!quick){
@@ -504,7 +516,7 @@
       text+=`whole image: ${line||'(none)'}\n`;
       candidates=detectPrintedIds(line);
     }
-    return {ids:candidates,text:text.trim(),lastRegion};
+    return {ids:candidates,text:text.trim(),lastRegion,confirmedInFrame};
   }
   // Keep a candidate briefly after an unreadable frame. On phones, the same
   // small code may alternate between crisp and blurry on consecutive readings.
@@ -535,20 +547,20 @@
     const session=scanner.session,token=scanner.scanToken;
     scanner.busy=true;scanner.autoAttempt++;
     updateScanButtons();setScanStatus('Reading the printed ID…');
-    let nextDelay=450;
+    let nextDelay=650;
     try{
       const canvas=visibleCameraCanvas(video,2100);
       const worker=await getOcrWorker();
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream)return;
       const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt,fromCamera:true});
-      if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
+      if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan'||!scanner.autoEnabled)return;
       let diagnostic=`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no ID recognized)');
       let found=bestCandidate(result.ids),nameKey='';
       if(found){scanner.nameCandidates=[];scanner.detectedName='';}
       if(!found&&state.loaded){
         setScanStatus('ID unclear. Checking the card name…');
         const fallback=await recognizeNameFallback(canvas,worker,{fromCamera:true,quick:true});
-        if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
+        if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan'||!scanner.autoEnabled)return;
         found=fallback.id;
         scanner.nameCandidates=fallback.candidates||[];
         scanner.detectedName=fallback.name||'';
@@ -566,20 +578,21 @@
         recordAutoEvidence('');
         if(scanner.autoIgnoreId&&++scanner.autoClearFrames>=2)scanner.autoIgnoreId='';
         setScanStatus(scanner.autoCandidateHits?'Checking the previous reading — hold card steady…':'Searching for ID or name… Keep the card steady in the two windows.');
-        nextDelay=500;
+        nextDelay=650;
       }else{
         scanner.autoClearFrames=0;
         const hits=recordAutoEvidence(key);
+        const confirmed=Boolean(found&&result.confirmedInFrame&&catalogCard(found));
         // Require two successful matches within the recent window, even if an
         // unreadable frame occurred between them. A different ID resets votes.
         // Never save without confirmation, even after a strong OCR match.
-        if(hits>=2){
+        if(hits>=2||confirmed){
           scanner.autoPaused=true;clearAutoTimer();
           renderScanMatch(found,!found);
           setScanStatus(found?`Recognized ${found}. Confirm the card and storage box.`:`Recognized ${scanner.detectedName}. Select its card ID to confirm.`);
         }else{
           setScanStatus(found?`Checking ${found} (1/2)…`:`Checking ${scanner.detectedName} (1/2)…`);
-          nextDelay=180;
+          nextDelay=350;
         }
       }
     }catch(err){
@@ -781,7 +794,7 @@
     const colors=['Red','Green','Blue','Purple','Black','Yellow'];
     return pageHeading('EXPLORE','Card catalog','Find cards by exact cost, crew, power, counter and effect text, then save them to your collection.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan card</button><button class="button btn-outline" data-action="open-custom">＋ Manual card</button></div>`)+
     `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select><select class="select" id="catalogColor" aria-label="Filter color"><option value="all">All colors</option>${colors.map(c=>`<option value="${c}" ${c===state.color?'selected':''}>${c}</option>`).join('')}</select></div>
-    ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
+    ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div id="catalogSelectionTools"></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
   }
 
   function normalizeEffect(value) {return String(value??'').toLowerCase().replace(/\b(one|two|three|four)\b/g,w=>({one:'1',two:'2',three:'3',four:'4'}[w])).replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
@@ -822,7 +835,8 @@
     if(state.view!=='catalog')return;
     const results=filteredCatalog();const shown=results.slice(0,state.perPage);
     document.querySelector('#catalogCount').textContent=`${fmt(results.length)} printings found ${!state.loaded?'· limited offline preview':''}`;
-    document.querySelector('#catalogGrid').innerHTML=shown.length?shown.map(c=>`<article class="card-tile"><div class="card-art"><img loading="lazy" src="${escapeHtml(c.image || imageUrl(c.id))}" alt="Artwork for ${escapeHtml(c.name)}"/><span class="art-id">${escapeHtml(c.id)}</span></div><div class="card-body"><strong title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</strong><div class="meta">${escapeHtml(cardMeta(c))}<div>Cost ${c.cost??'—'} · Power ${c.power??'—'} · Counter ${c.counter===null?'—':c.counter}</div>${c.types.length?`<div title="${escapeHtml(c.types.join(', '))}">${escapeHtml(c.types.join(' · '))}</div>`:''}</div><button type="button" class="button btn-primary small" data-action="add-card" data-id="${escapeHtml(c.id)}">＋ Add to collection</button><div class="owned">${qtyFor(c.id)?`${fmt(qtyFor(c.id))} owned`:'Not yet in your collection'}</div></div></article>`).join('') : empty('⌕','No matching cards','Try removing a filter or searching another effect.',`<button class="button btn-outline" data-action="clear-filters">Clear filters</button>`);
+    document.querySelector('#catalogSelectionTools').innerHTML=bulkSelectionTools('catalog');
+    document.querySelector('#catalogGrid').innerHTML=shown.length?shown.map(c=>`<article class="card-tile"><label class="catalog-select-label"><input type="checkbox" data-select-catalog="${escapeHtml(baseCardId(c.id))}" ${state.bulkCatalogIds.has(baseCardId(c.id))?'checked':''}> Select</label><div class="card-art"><img loading="lazy" src="${escapeHtml(c.image || imageUrl(c.id))}" alt="Artwork for ${escapeHtml(c.name)}"/><span class="art-id">${escapeHtml(c.id)}</span></div><div class="card-body"><strong title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</strong><div class="meta">${escapeHtml(cardMeta(c))}<div>Cost ${c.cost??'—'} · Power ${c.power??'—'} · Counter ${c.counter===null?'—':c.counter}</div>${c.types.length?`<div title="${escapeHtml(c.types.join(', '))}">${escapeHtml(c.types.join(' · '))}</div>`:''}</div><button type="button" class="button btn-primary small" data-action="add-card" data-id="${escapeHtml(c.id)}">＋ Add to collection</button><div class="owned">${qtyFor(c.id)?`${fmt(qtyFor(c.id))} owned`:'Not yet in your collection'}</div></div></article>`).join('') : empty('⌕','No matching cards','Try removing a filter or searching another effect.',`<button class="button btn-outline" data-action="clear-filters">Clear filters</button>`);
     document.querySelector('#catalogMore').innerHTML=shown.length<results.length?`<button class="button btn-outline" type="button" data-action="more-cards">Show more (${fmt(results.length-shown.length)} remaining)</button>`:'';
   }
 
@@ -905,15 +919,123 @@
     toast(deckTotal(d)===50?'OPTCGSim decklist exported.':'Draft deck exported (not yet 50 cards).');
   }
 
+
+  // Selection is UI-only: never saved to the collection or Supabase.
+  const MAX_BULK_RECORDS=100;
+  function inventoryFilteredRecords(){
+    const q=state.inventoryQuery.trim().toLowerCase();
+    return state.data.entries.filter(e=>(state.inventoryLocation==='all'||e.locationId===state.inventoryLocation)
+      &&(!q||`${e.cardId} ${e.name} ${e.slot} ${e.note}`.toLowerCase().includes(q)))
+      .sort((a,b)=>a.cardId.localeCompare(b.cardId,undefined,{numeric:true}));
+  }
+  function selectedPhysicalRecords(source){
+    const ids=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    return state.data.entries.filter(e=>source==='catalog'?ids.has(baseCardId(e.cardId)):ids.has(e.id));
+  }
+  function bulkSelectionTools(source){
+    const selected=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    const count=selected.size,qty=selectedPhysicalRecords(source).reduce((n,e)=>n+e.qty,0);
+    return `<div class="bulk-selection-bar" role="region" aria-label="Bulk card actions">
+      <strong>${fmt(count)} ${source==='catalog'?'card IDs':'inventory records'} selected</strong>
+      <span class="hint">${fmt(qty)} owned copies</span>
+      <button class="button btn-outline small" data-action="bulk-select-visible-${source}" type="button">Select visible (max ${MAX_BULK_RECORDS})</button>
+      <button class="button btn-ghost small" data-action="bulk-clear-${source}" type="button" ${count?'':'disabled'}>Clear</button>
+      ${source==='catalog'?'<button class="button btn-primary small" data-action="bulk-catalog-add" type="button" '+(count?'':'disabled')+'>Add selected to box</button>':''}
+      <button class="button btn-outline small" data-action="bulk-${source}-move" type="button" ${count&&qty?'':'disabled'}>Move owned copies</button>
+      <button class="button btn-danger small" data-action="bulk-${source}-delete" type="button" ${count&&qty?'':'disabled'}>Delete owned copies</button>
+    </div>`;
+  }
+  function openBulkSelection(source,action){
+    if(!requireCloudEdit())return;
+    const selected=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    if(!selected.size){toast('Select cards first.',true);return;}
+    const entries=selectedPhysicalRecords(source);
+    if(action==='add'){
+      if(source!=='catalog'||selected.size>MAX_BULK_RECORDS){toast('Select at most 100 card IDs.',true);return;}
+      modal(`<h2>Add selected cards</h2><p class="subhead">${fmt(selected.size)} card IDs · each ID receives the chosen quantity in one box.</p>
+        <form data-form="bulk-selected-add"><div class="form-fields"><label>Copies per selected ID<input class="field" name="qty" type="number" min="1" max="999" value="1" required></label>
+        <label>Destination box<select class="select" name="locationId">${locationOptions(scanner.lastLocationId)}</select></label></div>
+        <div class="modal-actions"><button type="button" class="button btn-ghost" data-action="close-modal">Cancel</button><button class="button btn-primary" type="submit">Add selected</button></div></form>`);
+      return;
+    }
+    if(!entries.length){toast('No owned copies match the selection.',true);return;}
+    if(entries.length>MAX_BULK_RECORDS){toast(`This selection affects ${fmt(entries.length)} records. Filter or select at most ${MAX_BULK_RECORDS} records per action.`,true);return;}
+    const copies=entries.reduce((n,e)=>n+e.qty,0);
+    const desc=source==='catalog'?'All owned copies of the selected card IDs, across every box, will be affected.':'Only the checked inventory records will be affected.';
+    if(action==='move'){
+      modal(`<h2>Move selected cards</h2><p class="subhead">${fmt(entries.length)} records · ${fmt(copies)} copies. ${desc}</p>
+      <form data-form="bulk-selected-move" data-source="${source}"><div class="form-fields">
+      <label>Move to box<select class="select" name="locationId" required>${locationOptions('')}</select></label>
+      <label><input type="checkbox" name="keepSlot" value="yes" checked> Keep existing position labels</label>
+      </div><p class="hint">All quantities move; decks and reservations remain unchanged. One database transaction per selection (up to 100 records).</p>
+      <div class="modal-actions"><button type="button" class="button btn-ghost" data-action="close-modal">Cancel</button><button class="button btn-primary" type="submit">Move ${fmt(copies)} copies</button></div></form>`);
+    }else if(action==='delete'){
+      modal(`<h2>Delete selected cards</h2><p class="subhead">${fmt(entries.length)} records · <strong>${fmt(copies)} physical copies</strong>. ${desc}</p>
+      <form data-form="bulk-selected-delete" data-source="${source}"><div class="form-fields"><p class="help-note">This deletes the selected owned copies from the shared cloud. Deck plans are not deleted. Download a backup beforehand.</p>
+      <label>Type DELETE to confirm<input class="field" name="confirmation" autocomplete="off" placeholder="DELETE" required></label></div>
+      <div class="modal-actions"><button type="button" class="button btn-ghost" data-action="close-modal">Cancel</button><button class="button btn-danger" type="submit">Delete ${fmt(copies)} copies</button></div></form>`);
+    }
+  }
+  async function applySelectedBulk(form){
+    const type=form.dataset.form,source=form.dataset.source||'catalog';
+    const selected=source==='catalog'?state.bulkCatalogIds:state.bulkInventoryIds;
+    if(!requireCloudEdit()||sync.writing){toast('Wait for the previous cloud save to finish.',true);return;}
+    const snapshot=copyData(state.data),next=copyData(snapshot);
+    let affected=0;
+    if(type==='bulk-selected-add'){
+      if(!selected.size||selected.size>MAX_BULK_RECORDS)return;
+      const f=new FormData(form),qty=qtyValue(f.get('qty')),loc=String(f.get('locationId')||'');
+      if(!qty||qty>999||!locationById(loc)){toast('Check quantity and box.',true);return;}
+      for(const id of selected){
+        const card=baseCatalogCard(id);
+        if(!card){toast('Missing catalog card '+id,true);return;}
+        const existing=next.entries.find(e=>baseCardId(e.cardId)===id&&e.locationId===loc&&!(e.slot||''));
+        if(existing){if(existing.qty+qty>MAX_QTY){toast('Maximum copies reached for '+id,true);return;}existing.qty+=qty;existing.updatedAt=dateNow();}
+        else next.entries.push({id:uid(),cardId:id,name:card.name,qty,locationId:loc,slot:'',note:'',rarity:card.rarity||'',colors:card.colors||'',updatedAt:dateNow()});
+        affected+=qty;
+      }
+    }else{
+      const records=selectedPhysicalRecords(source);
+      if(!records.length||records.length>MAX_BULK_RECORDS){toast('Choose up to 100 owned records.',true);return;}
+      const ids=new Set(records.map(e=>e.id));
+      const copies=records.reduce((n,e)=>n+e.qty,0);
+      if(type==='bulk-selected-delete'){
+        if(String(new FormData(form).get('confirmation')||'')!=='DELETE'){toast('Type DELETE exactly to confirm.',true);return;}
+        next.entries=next.entries.filter(e=>!ids.has(e.id));affected=copies;
+      }else if(type==='bulk-selected-move'){
+        const f=new FormData(form),loc=String(f.get('locationId')||''),keepSlot=f.get('keepSlot')==='yes';
+        if(!locationById(loc)){toast('Choose a destination box.',true);return;}
+        const moving=records.filter(e=>e.locationId!==loc);
+        const movingIds=new Set(moving.map(e=>e.id));
+        next.entries=next.entries.filter(e=>!movingIds.has(e.id));
+        for(const en of moving){
+          const slot=keepSlot?String(en.slot||''):'';
+          const existing=next.entries.find(e=>e.cardId===en.cardId&&e.locationId===loc&&String(e.slot||'').toLowerCase()===slot.toLowerCase());
+          if(existing){if(existing.qty+en.qty>MAX_QTY){toast('Maximum copies reached for '+en.cardId,true);return;}existing.qty+=en.qty;existing.updatedAt=dateNow();}
+          else next.entries.push({...en,id:uid(),locationId:loc,slot,updatedAt:dateNow()});
+          affected+=en.qty;
+        }
+      }else return;
+    }
+    if(!affected){toast('Nothing to change. Selected cards are already in this box.');return;}
+    const ops=diffData(snapshot,next);
+    if(ops.length>200){toast('Too many records to update together. Narrow the selection.',true);return;}
+    state.data=next;selected.clear();persist();closeModal();render();
+    toast('Saving '+fmt(affected)+' copies to shared cloud…');
+    const ok=await waitForCloudSave();
+    if(ok)toast('Cloud saved '+fmt(affected)+' copies.');
+    else toast('Cloud save failed. Reload the shared collection before trying again.',true);
+  }
   function inventoryTable(entries, compact=false) {
-    return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Card</th><th>Location / position</th><th>Copies</th>${compact?'':'<th>Actions</th>'}</tr></thead><tbody>${entries.map(e=>`<tr><td><div class="card-cell">${miniImg(e.cardId)}<div><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.cardId)} · ${escapeHtml(e.rarity||'Card')}${reservedTotal(e.cardId)?` · Reserved ${reservedTotal(e.cardId)} across decks`:''}</small></div></div></td><td>${pill(e.locationId)}${e.slot?`<div class="hint">${escapeHtml(e.slot)}</div>`:''}</td><td>${compact?`<strong>${fmt(e.qty)}</strong>`:`<div class="quantity-ctrl"><button aria-label="Remove one copy" data-action="minus" data-id="${escapeHtml(e.id)}" type="button">−</button><strong>${fmt(e.qty)}</strong><button aria-label="Add one copy" data-action="plus" data-id="${escapeHtml(e.id)}" type="button">＋</button></div>`}</td>${compact?'':`<td><button class="button btn-outline tiny" data-action="edit-entry" data-id="${escapeHtml(e.id)}" type="button">Edit</button></td>`}</tr>`).join('')}</tbody></table></div>`;
+    const all=entries.length>0&&entries.every(e=>state.bulkInventoryIds.has(e.id));
+    return `<div class="table-wrap"><table class="data-table"><thead><tr>${compact?'':`<th><input type="checkbox" data-select-inventory-all aria-label="Select all filtered inventory records" ${all?'checked':''}></th>`}<th>Card</th><th>Location / position</th><th>Copies</th>${compact?'':'<th>Actions</th>'}</tr></thead><tbody>${entries.map(e=>`<tr>${compact?'':`<td><input type="checkbox" data-select-inventory="${escapeHtml(e.id)}" aria-label="Select ${escapeHtml(e.cardId)} in ${escapeHtml(locationById(e.locationId)?.name||'Unsorted')}" ${state.bulkInventoryIds.has(e.id)?'checked':''}></td>`}<td><div class="card-cell">${miniImg(e.cardId)}<div><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.cardId)} · ${escapeHtml(e.rarity||'Card')}${reservedTotal(e.cardId)?` · Reserved ${reservedTotal(e.cardId)} across decks`:''}</small></div></div></td><td>${pill(e.locationId)}${e.slot?`<div class="hint">${escapeHtml(e.slot)}</div>`:''}</td><td>${compact?`<strong>${fmt(e.qty)}</strong>`:`<div class="quantity-ctrl"><button aria-label="Remove one copy" data-action="minus" data-id="${escapeHtml(e.id)}" type="button">−</button><strong>${fmt(e.qty)}</strong><button aria-label="Add one copy" data-action="plus" data-id="${escapeHtml(e.id)}" type="button">＋</button></div>`}</td>${compact?'':`<td><button class="button btn-outline tiny" data-action="edit-entry" data-id="${escapeHtml(e.id)}" type="button">Edit</button></td>`}</tr>`).join('')}</tbody></table></div>`;
   }
   function inventoryView() {
-    const query=state.inventoryQuery.trim().toLowerCase();
-    const entries=state.data.entries.filter(e=>(state.inventoryLocation==='all'||e.locationId===state.inventoryLocation) && (!query || `${e.cardId} ${e.name} ${e.slot} ${e.note}`.toLowerCase().includes(query))).sort((a,b)=>a.cardId.localeCompare(b.cardId,undefined,{numeric:true}));
+    const entries=inventoryFilteredRecords();
     return pageHeading('WHAT YOU OWN','My inventory','Every physical copy stays in its numbered box; deck reservations are shown as virtual claims.',`<div class="actions"><button class="button btn-primary" type="button" data-view="scan">◎ Scan card</button><button class="button btn-outline" type="button" data-action="open-custom">＋ Add card</button></div>`)+
     `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="inventorySearch" type="search" placeholder="Find a card, position or note" value="${escapeHtml(state.inventoryQuery)}" aria-label="Search inventory" /></label><select id="inventoryLocation" class="select" aria-label="Filter by location"><option value="all">All locations</option>${locationOptions(state.inventoryLocation)}</select><button class="button btn-outline" data-action="open-bulk" type="button">↑ Import list</button><button class="button btn-outline" data-action="import-inventory-csv" type="button">↑ Import CSV</button><button class="button btn-outline" data-action="export-inventory-csv" type="button">↓ Export CSV</button></div>
     <div class="catalog-info"><span>${fmt(entries.length)} records · ${fmt(entries.reduce((n,e)=>n+e.qty,0))} copies</span><span>Tap Edit to move a card or update its binder position.</span></div>
+    ${bulkSelectionTools('inventory')}
     ${entries.length?inventoryTable(entries):empty('▤',state.data.entries.length?'No results':'Your inventory is empty',state.data.entries.length?'Try a different search or storage location.':'Search the catalog or import an OPTCGSim decklist.',`<button class="button btn-primary" data-view="catalog">Browse cards</button>`)}`;
   }
   function locationsView() {
@@ -1189,8 +1311,23 @@
     const nav=e.target.closest('[data-view]');if(nav){setView(nav.dataset.view);return;}
     const btn=e.target.closest('[data-action]');if(!btn)return;
     const action=btn.dataset.action, id=btn.dataset.id;
-    const writes=['add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
+    const writes=['bulk-catalog-add','bulk-catalog-move','bulk-catalog-delete','bulk-inventory-move','bulk-inventory-delete','add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
     if(writes.includes(action)&&!requireCloudEdit())return;
+    if(action==='bulk-select-visible-inventory'){
+      const rows=inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS);
+      rows.forEach(e=>state.bulkInventoryIds.add(e.id));render();return;
+    }
+    if(action==='bulk-select-visible-catalog'){
+      filteredCatalog().slice(0,state.perPage).slice(0,MAX_BULK_RECORDS).forEach(c=>state.bulkCatalogIds.add(baseCardId(c.id)));
+      paintCatalog();return;
+    }
+    if(action==='bulk-clear-inventory'){state.bulkInventoryIds.clear();render();return;}
+    if(action==='bulk-clear-catalog'){state.bulkCatalogIds.clear();paintCatalog();return;}
+    if(action.startsWith('bulk-catalog-')||action.startsWith('bulk-inventory-')){
+      const source=action.startsWith('bulk-catalog-')?'catalog':'inventory',kind=action.split('-').at(-1);
+      if(['add','move','delete'].includes(kind))openBulkSelection(source,kind);
+      return;
+    }
     if(action==='add-numbered-box'){
       const used=new Set(state.data.locations.map(l=>{const m=/^box\s+(\d+)$/i.exec(l.name);return m?Number(m[1]):null}));
       let n=1;while(used.has(n))n++;state.data.locations.push({id:uid(),name:'Box '+n,kind:'Box',note:''});persist();render();toast('Created Box '+n);return;
@@ -1254,6 +1391,14 @@
     if(action==='flip-camera'){flipCamera();return;}
     if(action==='stop-camera'){stopCamera();updateScanButtons();setScanStatus('Camera stopped. You can start it again or choose a photo.');return;}
     if(action==='capture-card'){captureCard();return;}
+    if(action==='toggle-auto'){
+      scanner.autoEnabled=!scanner.autoEnabled;
+      localStorage.setItem(SCANNER_AUTO_KEY,scanner.autoEnabled?'on':'off');
+      clearAutoTimer();clearAutoProgress();scanner.scanToken++;
+      if(scanner.autoEnabled){scanner.autoPaused=false;setScanStatus('Automatic scanning enabled. Hold a card steady.');scheduleAutoScan(350);}
+      else {scanner.autoPaused=false;setScanStatus('Automatic scan disabled. Use Capture card for each card.');}
+      updateScanButtons();return;
+    }
     if(action==='scan-again'){resumeScanning({message:scanner.autoEnabled?'Looking for the next card automatically…':'Ready for another card. Use Capture once.'});return;}
     if(action==='confirm-restore'){toast('Direct backup restore is disabled in cloud-first v1.2.0 to protect the shared inventory. Contact the owner for a reviewed import.',true);return;}
     /* if(action==='confirm-restore'){
@@ -1270,7 +1415,8 @@
   document.addEventListener('submit',e=>{
     const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();
     const f=new FormData(form), type=form.dataset.form;
-    if(['import-deck','import-inventory-csv','new-deck','rename-deck','scan-add','add-entry','edit-entry','location','bulk'].includes(type)&&!requireCloudEdit())return;
+    if(['bulk-selected-add','bulk-selected-move','bulk-selected-delete','import-deck','import-inventory-csv','new-deck','rename-deck','scan-add','add-entry','edit-entry','location','bulk'].includes(type)&&!requireCloudEdit())return;
+    if(type.startsWith('bulk-selected-')){applySelectedBulk(form);return;}
     if(type==='import-deck'){readDeckImport(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='import-inventory-csv'){importExternalCsv(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='cloud-config'){
@@ -1409,6 +1555,20 @@
     }
   });
   document.addEventListener('change',e=>{
+    if(e.target.dataset.selectInventory!==undefined){
+      const id=e.target.dataset.selectInventory;
+      if(e.target.checked)state.bulkInventoryIds.add(id);else state.bulkInventoryIds.delete(id);
+      render();return;
+    }
+    if(e.target.dataset.selectCatalog!==undefined){
+      const id=e.target.dataset.selectCatalog;
+      if(e.target.checked)state.bulkCatalogIds.add(id);else state.bulkCatalogIds.delete(id);
+      paintCatalog();return;
+    }
+    if(e.target.dataset.selectInventoryAll!==undefined){
+      inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS).forEach(r=>e.target.checked?state.bulkInventoryIds.add(r.id):state.bulkInventoryIds.delete(r.id));
+      render();return;
+    }
     if(e.target.id==='catalogSet'){state.set=e.target.value;state.perPage=48;paintFilterResults();}
     if(e.target.id==='catalogColor'){state.color=e.target.value;state.perPage=48;paintFilterResults();}
     if(e.target.dataset.filterCost!==undefined){const n=Number(e.target.dataset.filterCost);if(e.target.checked)state.filters.costs.add(n);else state.filters.costs.delete(n);state.perPage=48;paintFilterResults();}

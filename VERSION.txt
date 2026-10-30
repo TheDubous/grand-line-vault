@@ -1,1 +1,1 @@
-Grand Line Vault 1.2.5 — stronger automatic OCR, retained matches through blurry frames, unchanged cloud storage.
+Grand Line Vault 1.2.6 — wider NAME area, automatic/manual Capture switch, stronger one-frame OCR, bulk card actions.
