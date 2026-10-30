@@ -1,0 +1,27 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const path=require('node:path');
+let src=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+src=src.replace('  render();loadCatalog();','  globalThis.TEST={recordAutoEvidence,scanner,recognizeIdFrame,recognizeNameFallback};');
+const node={classList:{contains(){return false},toggle(){},remove(){},add(){}},getContext(){return {drawImage(){}}},setAttribute(){},addEventListener(){}};
+const doc={querySelector(){return node},querySelectorAll(){return []},addEventListener(){},createElement(tag){if(tag!=='canvas')throw Error(tag);return {width:0,height:0,getContext(){return {drawImage(){},set imageSmoothingEnabled(v){},set imageSmoothingQuality(v){},set filter(v){}}},setAttribute(){}}}};
+const ctx={console,crypto:require('crypto').webcrypto,setTimeout,clearTimeout,setInterval(){},window:{addEventListener(){}},document:doc,localStorage:{getItem(){return null},setItem(){}},Intl,Date,Map,Set,URL,JSON,Math,Number,String,Array,Blob};
+vm.createContext(ctx);vm.runInContext(src,ctx);
+const {recordAutoEvidence,scanner,recognizeIdFrame}=ctx.TEST;
+assert.equal(recordAutoEvidence('OP14-048',1000),1);
+assert.equal(recordAutoEvidence('',1500),0);
+assert.equal(recordAutoEvidence('OP14-048',2000),2,'one blurry frame must not reset evidence');
+assert.equal(recordAutoEvidence('OP16-110',2500),1,'a different card must reset evidence');
+assert.equal(recordAutoEvidence('OP16-110',3000),2);
+assert.equal(recordAutoEvidence('',12000),0);
+assert.equal(recordAutoEvidence('OP14-048',13000),1,'stale card must reset');
+(async()=>{
+  let calls=0;const worker={async setParameters(){},async recognize(){calls++;return {data:{text:calls===3?'OP14-048':''}}}};
+  const source={width:1000,height:1600};
+  const out=await recognizeIdFrame(source,worker,{quick:true});
+  assert.equal(out.ids[0],'OP14-048');
+  assert.equal(calls,3,'automatic OCR must try the high-contrast fallback crop');
+  console.log('PASS auto scanner: retained matches, changed card reset, stale expiry and expanded OCR');
+})().catch(e=>{console.error(e);process.exitCode=1});
