@@ -107,7 +107,7 @@
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
   const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
@@ -281,7 +281,7 @@
     const picker=document.querySelector('#scanPhoto');if(picker)picker.disabled=scanner.busy;
   }
   function clearAutoTimer(){if(scanner.autoTimer!==null){clearTimeout(scanner.autoTimer);scanner.autoTimer=null;}}
-  function clearAutoProgress(){scanner.autoHistory=[];scanner.autoAttempt=0;scanner.autoClearFrames=0;}
+  function clearAutoProgress(){scanner.autoHistory=[];scanner.autoCandidateKey='';scanner.autoCandidateSeenAt=0;scanner.autoCandidateHits=0;scanner.autoAttempt=0;scanner.autoClearFrames=0;}
   function scheduleAutoScan(delay=300){
     clearAutoTimer();
     if(state.view!=='scan'||!scanner.stream||!scanner.autoEnabled||scanner.autoPaused||scanner.busy||document.hidden)return;
@@ -479,9 +479,9 @@
   }
   async function recognizeIdFrame(canvas,worker,{quick=false,attempt=0,fromCamera=false}={}){
     const regions=scanIdRegions(fromCamera);
-    // One high-quality focused OCR, then a slightly wider backup crop if needed.
-    // Do not rotate to slow, distant regions on every automatic scan.
-    const order=quick?[0,1]:[0,1,2,3];
+    // Automatic mode also tries a wider, higher-contrast crop on failure.
+    // Successful focused reads still finish after the first region.
+    const order=quick?[0,1,2]:[0,1,2,3];
     let text='', candidates=[], lastRegion='';
     for(const idx of order){
       const opts=regions[idx];
@@ -506,6 +506,26 @@
     }
     return {ids:candidates,text:text.trim(),lastRegion};
   }
+  // Keep a candidate briefly after an unreadable frame. On phones, the same
+  // small code may alternate between crisp and blurry on consecutive readings.
+  // A different recognized card resets the candidate immediately. Never auto-save.
+  function recordAutoEvidence(key,now=Date.now()){
+    const windowMs=8000;
+    if(!key){
+      if(now-scanner.autoCandidateSeenAt>windowMs){
+        scanner.autoCandidateKey='';scanner.autoCandidateHits=0;scanner.autoHistory=[];
+      }
+      return 0;
+    }
+    if(scanner.autoCandidateKey!==key||now-scanner.autoCandidateSeenAt>windowMs){
+      scanner.autoCandidateKey=key;scanner.autoCandidateHits=1;scanner.autoHistory=[key];
+    }else{
+      scanner.autoCandidateHits=Math.min(3,scanner.autoCandidateHits+1);
+      scanner.autoHistory.push(key);scanner.autoHistory=scanner.autoHistory.slice(-5);
+    }
+    scanner.autoCandidateSeenAt=now;
+    return scanner.autoCandidateHits;
+  }
   // One automatic recognition mode. OCR runs on the fixed lower-text windows;
   // the user can still press Capture to trigger a full manual fallback.
   async function runAutoScan(){
@@ -515,7 +535,7 @@
     const session=scanner.session,token=scanner.scanToken;
     scanner.busy=true;scanner.autoAttempt++;
     updateScanButtons();setScanStatus('Reading the printed ID…');
-    let nextDelay=440;
+    let nextDelay=450;
     try{
       const canvas=visibleCameraCanvas(video,2100);
       const worker=await getOcrWorker();
@@ -539,19 +559,19 @@
       const key=found||nameKey;
       if(found===scanner.autoIgnoreId && found){
         // No duplicate addition while the card just saved is still held still.
-        scanner.autoClearFrames=0;scanner.autoHistory=[];
+        scanner.autoClearFrames=0;scanner.autoHistory=[];scanner.autoCandidateKey='';scanner.autoCandidateHits=0;
         setScanStatus(`${found} was just saved. Remove it and present the next card.`);
         nextDelay=700;
       }else if(!key){
-        scanner.autoHistory=[];
+        recordAutoEvidence('');
         if(scanner.autoIgnoreId&&++scanner.autoClearFrames>=2)scanner.autoIgnoreId='';
-        setScanStatus('Searching for ID or name… Keep the card steady in the two windows.');
-        nextDelay=440;
+        setScanStatus(scanner.autoCandidateHits?'Checking the previous reading — hold card steady…':'Searching for ID or name… Keep the card steady in the two windows.');
+        nextDelay=500;
       }else{
         scanner.autoClearFrames=0;
-        scanner.autoHistory.push(key);scanner.autoHistory=scanner.autoHistory.slice(-3);
-        const hits=scanner.autoHistory.filter(x=>x===key).length;
-        // Two matching passes are required for every automatic suggestion.
+        const hits=recordAutoEvidence(key);
+        // Require two successful matches within the recent window, even if an
+        // unreadable frame occurred between them. A different ID resets votes.
         // Never save without confirmation, even after a strong OCR match.
         if(hits>=2){
           scanner.autoPaused=true;clearAutoTimer();
@@ -608,7 +628,7 @@
     try{
       // Restore spaces and mixed case: the ID-only whitelist blocks real names.
       await worker.setParameters({tessedit_char_whitelist:'',tessedit_pageseg_mode:'7'});
-      for(const opts of (quick?regions.slice(0,1):regions)){
+      for(const opts of (quick?regions.slice(0,2):regions)){
         const crop=ocrCrop(canvas,opts);
         showOcrCrop(crop,opts.label);
         await worker.setParameters({tessedit_pageseg_mode:opts.label.includes('fallback')?'11':'7'});
