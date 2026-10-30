@@ -1,8 +1,8 @@
 {
   "name": "Grand Line Vault — One Piece TCG Storage",
   "short_name": "Grand Line Vault",
-  "description": "Grand Line Vault 1.2.3 — private live cloud inventory and English One Piece card scanner.",
-  "start_url": "./",
+  "description": "Grand Line Vault 1.2.4 — fixed dual targets, always-on reliable scanning, private live shared inventory.",
+  "start_url": "./?v=1.2.4",
   "scope": "./",
   "display": "standalone",
   "background_color": "#fcf9f5",

@@ -346,19 +346,21 @@ a{color:#915575}
   .scanner-panel{padding:12px}
 }
 
-/* v1.2.3 — two *independent* OCR windows; no misleading whole-card corners.
+/* v1.2.4 — two *independent* OCR windows; no misleading whole-card corners.
    These regions are measured directly by scannerGuideRect() in app.js. */
 .scan-preview .scan-ocr-target{
  position:absolute;z-index:5;box-sizing:border-box;pointer-events:none;
  border-radius:9px;box-shadow:0 0 0 1px rgba(9,31,45,.28);
  background:rgba(244,209,231,.09);opacity:1;
 }
+/* Calibrated against iPhone recording: name near 76-83% of preview,
+   ID near 83-89%. Both remain FIXED, no card-edge detection. */
 .scan-preview .scan-name-target{
- left:21%;top:74%;width:53%;height:10%;
+ left:22%;top:75%;width:57%;height:8%;
  border:2.5px dashed #f8a9cf;
 }
 .scan-preview .scan-id-target{
- left:69%;top:83%;width:29%;height:9%;
+ left:71%;top:83%;width:25%;height:6.5%;
  border:2.5px dashed #72d9ff;background:rgba(109,211,250,.13);
 }
 .scan-preview .scan-ocr-target span{
@@ -375,7 +377,17 @@ a{color:#915575}
 .scan-candidate-label{display:grid;gap:8px;color:#59617a;font-size:12px;font-weight:700;margin:11px 0}
 .scan-candidate-label .select{width:100%;min-width:0}
 @media(max-width:690px){
- .scan-preview .scan-name-target{left:20%;top:74%;width:53%;height:10%}
- .scan-preview .scan-id-target{left:69%;top:83%;width:29%;height:9%}
+ .scan-preview .scan-name-target{left:22%;top:75%;width:57%;height:8%}
+ .scan-preview .scan-id-target{left:71%;top:83%;width:25%;height:6.5%}
  .scan-preview .scan-ocr-target span{font-size:9px}
+}
+
+/* v1.2.4: always-on automatic scan indicator (not an interactive mode switch). */
+.scan-auto-state{display:flex;align-items:center;justify-content:center;padding:10px 14px;
+ border-radius:12px;background:#d9efe7;border:1px solid #a4c9bd;color:#266d58;
+ font-size:13px;font-weight:750;text-align:center;min-height:41px;}
+.scan-auto-state:not(.is-on){background:#faf0de;color:#846a3d;border-color:#d9c5a1;}
+.scanner-controls .scan-auto-state{flex:1;min-width:135px;}
+@media(max-width:690px){
+ .scanner-controls .scan-auto-state{grid-column:1;grid-row:2;min-width:0;}
 }

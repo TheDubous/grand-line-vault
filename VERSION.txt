@@ -1,1 +1,1 @@
-Grand Line Vault 1.2.3 — dual name/ID OCR targets and clearer camera alignment.
+Grand Line Vault 1.2.4 — fixed NAME/ID windows and one reliable automatic scan mode.
