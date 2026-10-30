@@ -1311,8 +1311,23 @@
     const nav=e.target.closest('[data-view]');if(nav){setView(nav.dataset.view);return;}
     const btn=e.target.closest('[data-action]');if(!btn)return;
     const action=btn.dataset.action, id=btn.dataset.id;
-    const writes=['add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
+    const writes=['bulk-catalog-add','bulk-catalog-move','bulk-catalog-delete','bulk-inventory-move','bulk-inventory-delete','add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
     if(writes.includes(action)&&!requireCloudEdit())return;
+    if(action==='bulk-select-visible-inventory'){
+      const rows=inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS);
+      rows.forEach(e=>state.bulkInventoryIds.add(e.id));render();return;
+    }
+    if(action==='bulk-select-visible-catalog'){
+      filteredCatalog().slice(0,state.perPage).slice(0,MAX_BULK_RECORDS).forEach(c=>state.bulkCatalogIds.add(baseCardId(c.id)));
+      paintCatalog();return;
+    }
+    if(action==='bulk-clear-inventory'){state.bulkInventoryIds.clear();render();return;}
+    if(action==='bulk-clear-catalog'){state.bulkCatalogIds.clear();paintCatalog();return;}
+    if(action.startsWith('bulk-catalog-')||action.startsWith('bulk-inventory-')){
+      const source=action.startsWith('bulk-catalog-')?'catalog':'inventory',kind=action.split('-').at(-1);
+      if(['add','move','delete'].includes(kind))openBulkSelection(source,kind);
+      return;
+    }
     if(action==='add-numbered-box'){
       const used=new Set(state.data.locations.map(l=>{const m=/^box\s+(\d+)$/i.exec(l.name);return m?Number(m[1]):null}));
       let n=1;while(used.has(n))n++;state.data.locations.push({id:uid(),name:'Box '+n,kind:'Box',note:''});persist();render();toast('Created Box '+n);return;
@@ -1400,7 +1415,8 @@
   document.addEventListener('submit',e=>{
     const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();
     const f=new FormData(form), type=form.dataset.form;
-    if(['import-deck','import-inventory-csv','new-deck','rename-deck','scan-add','add-entry','edit-entry','location','bulk'].includes(type)&&!requireCloudEdit())return;
+    if(['bulk-selected-add','bulk-selected-move','bulk-selected-delete','import-deck','import-inventory-csv','new-deck','rename-deck','scan-add','add-entry','edit-entry','location','bulk'].includes(type)&&!requireCloudEdit())return;
+    if(type.startsWith('bulk-selected-')){applySelectedBulk(form);return;}
     if(type==='import-deck'){readDeckImport(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='import-inventory-csv'){importExternalCsv(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='cloud-config'){
@@ -1539,6 +1555,20 @@
     }
   });
   document.addEventListener('change',e=>{
+    if(e.target.dataset.selectInventory!==undefined){
+      const id=e.target.dataset.selectInventory;
+      if(e.target.checked)state.bulkInventoryIds.add(id);else state.bulkInventoryIds.delete(id);
+      render();return;
+    }
+    if(e.target.dataset.selectCatalog!==undefined){
+      const id=e.target.dataset.selectCatalog;
+      if(e.target.checked)state.bulkCatalogIds.add(id);else state.bulkCatalogIds.delete(id);
+      paintCatalog();return;
+    }
+    if(e.target.dataset.selectInventoryAll!==undefined){
+      inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS).forEach(r=>e.target.checked?state.bulkInventoryIds.add(r.id):state.bulkInventoryIds.delete(r.id));
+      render();return;
+    }
     if(e.target.id==='catalogSet'){state.set=e.target.value;state.perPage=48;paintFilterResults();}
     if(e.target.id==='catalogColor'){state.color=e.target.value;state.perPage=48;paintFilterResults();}
     if(e.target.dataset.filterCost!==undefined){const n=Number(e.target.dataset.filterCost);if(e.target.checked)state.filters.costs.add(n);else state.filters.costs.delete(n);state.perPage=48;paintFilterResults();}
