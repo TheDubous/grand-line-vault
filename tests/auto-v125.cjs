@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 let src=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-src=src.replace('  render();loadCatalog();','  globalThis.TEST={recordAutoEvidence,scanner,recognizeIdFrame,recognizeNameFallback};');
+src=src.replace('  render();loadCatalog();updateCloudBadge();','  globalThis.TEST={recordAutoEvidence,scanner,recognizeIdFrame,recognizeNameFallback};');
 const node={classList:{contains(){return false},toggle(){},remove(){},add(){}},getContext(){return {drawImage(){}}},setAttribute(){},addEventListener(){}};
 const doc={querySelector(){return node},querySelectorAll(){return []},addEventListener(){},createElement(tag){if(tag!=='canvas')throw Error(tag);return {width:0,height:0,getContext(){return {drawImage(){},set imageSmoothingEnabled(v){},set imageSmoothingQuality(v){},set filter(v){}}},setAttribute(){}}}};
 const ctx={console,crypto:require('crypto').webcrypto,setTimeout,clearTimeout,setInterval(){},window:{addEventListener(){}},document:doc,localStorage:{getItem(){return null},setItem(){}},Intl,Date,Map,Set,URL,JSON,Math,Number,String,Array,Blob};
