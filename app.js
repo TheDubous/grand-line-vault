@@ -107,8 +107,9 @@
     catch (err) { console.warn('Cannot load saved collection:', err); return initialData(); }
   }
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
-  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:true, autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const SCANNER_AUTO_KEY = 'grand-line-vault-auto-enabled';
+  const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:localStorage.getItem(SCANNER_AUTO_KEY)!=='off', autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
   // v1.2: Supabase is the only editable source; localStorage is read-only cache.
@@ -228,10 +229,10 @@
 
   // Camera access requires HTTPS (such as GitHub Pages) or localhost; photo import is the fallback.
   function scanView() {
-    return pageHeading('FAST CARD ENTRY','Scan your cards','Keep the name inside the pink window and the printed code inside the blue window. Automatic recognition is always on; Capture is a backup.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
+    return pageHeading('FAST CARD ENTRY','Scan your cards','Keep the name inside the pink window and the printed code inside the blue window. Use automatic recognition, or turn Auto OFF to use only Capture card.',`<button class="button btn-outline" data-view="inventory" type="button">View inventory →</button>`)+
     `<div class="scanner-layout"><section class="panel scanner-panel">
       <div class="scan-preview" id="scanPreview"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-placeholder" id="scanPlaceholder"><span class="scan-camera-icon">◎</span><strong>Point your camera at one card</strong><small>Align its printed name and ID with the two colored windows.</small></div><div class="scan-name-target scan-ocr-target" aria-hidden="true"><span>NAME</span></div><div class="scan-id-target scan-ocr-target" aria-hidden="true"><span>ID</span></div></div>
-      <div class="scan-guide-legend" aria-hidden="true"><span><i></i>Card name</span><span><i class="id-swatch"></i>Printed ID</span></div><p class="scan-hint">Only the name and ID need to be readable. The whole card does not have to fit inside an outline.</p><div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><span class="scan-auto-state is-on" id="scanAuto" role="status" aria-live="polite">● Automatic scan ON</span><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
+      <div class="scan-guide-legend" aria-hidden="true"><span><i></i>Card name</span><span><i class="id-swatch"></i>Printed ID</span></div><p class="scan-hint">Only the name and ID need to be readable. The whole card does not have to fit inside an outline.</p><div class="scanner-controls"><button class="button btn-primary" type="button" id="scanStart" data-action="start-camera">◎ Start camera</button><button class="button btn-primary" type="button" id="scanCapture" data-action="capture-card" disabled>▣ Capture card</button><button class="button btn-outline scan-auto-state" id="scanAuto" data-action="toggle-auto" type="button" aria-pressed="${scanner.autoEnabled}">Automatic scan: ${scanner.autoEnabled?'ON':'OFF'}</button><button class="button btn-outline" type="button" id="scanFlip" data-action="flip-camera" disabled>⇄ Flip</button><button class="button btn-ghost" type="button" id="scanStop" data-action="stop-camera" disabled>Stop</button></div>
       <label class="photo-import button btn-outline">↥ Use photo instead<input id="scanPhoto" type="file" accept="image/*" capture="environment" /></label>
       <p class="scan-status" id="scanStatus" role="status" aria-live="polite">Start the camera. Detection will suggest a card automatically, or tap Capture card.</p>
       <div class="scan-session"><strong>Cards saved in this session: <span id="scanSaved">${fmt(scanner.saved)}</span></strong><span id="scanResult"></span></div>
@@ -277,7 +278,7 @@
     if(start){start.disabled=scanner.busy||!!scanner.stream;start.textContent=scanner.stream?'Camera running':'◎ Start rear camera';}
     if(stop)stop.disabled=!scanner.stream;
     if(flip)flip.disabled=!scanner.stream||scanner.busy;
-    if(auto){auto.textContent=scanner.autoEnabled?'● Automatic scanning ON':'○ Automatic scan unavailable';auto.classList.toggle('is-on',scanner.autoEnabled);}
+    if(auto){auto.textContent=scanner.autoEnabled?'● Automatic scan ON':'○ Automatic scan OFF';auto.classList.toggle('is-on',scanner.autoEnabled);auto.setAttribute('aria-pressed',String(scanner.autoEnabled));}
     const picker=document.querySelector('#scanPhoto');if(picker)picker.disabled=scanner.busy;
   }
   function clearAutoTimer(){if(scanner.autoTimer!==null){clearTimeout(scanner.autoTimer);scanner.autoTimer=null;}}
@@ -322,7 +323,7 @@
       document.querySelector('#scanPlaceholder').hidden=true;
       document.querySelector('#scanPreview').classList.add('live');
       const actualLens=stream.getVideoTracks()[0]?.getSettings?.().facingMode;
-      scanner.autoEnabled=true;setScanStatus(actualLens==='user'?'Front camera selected. Use Flip to try the rear camera for clearer text.':'Automatic scanning active. Hold the card steady for a moment. The name is pink; the ID is blue.');
+      setScanStatus(actualLens==='user'?'Front camera selected. Use Flip to try the rear camera for clearer text.':scanner.autoEnabled?'Automatic scanning active. Hold the card steady for a moment.':'Manual Capture mode. Press Capture card when the card is aligned.');
       updateScanButtons();scheduleAutoScan(400);
     }catch(err){stopCamera();setScanStatus('Could not start camera: '+(err.name==='NotAllowedError'?'permission denied. Allow camera in browser settings, or use Take / upload photo.':`${err.message || 'camera not available'}. You can still use a photo.`));updateScanButtons();}
   }
@@ -482,7 +483,7 @@
     // Automatic mode also tries a wider, higher-contrast crop on failure.
     // Successful focused reads still finish after the first region.
     const order=quick?[0,1,2]:[0,1,2,3];
-    let text='', candidates=[], lastRegion='';
+    let text='', candidates=[], lastRegion='',confirmedInFrame=false;
     for(const idx of order){
       const opts=regions[idx];
       const crop=ocrCrop(canvas,{...opts,highContrast:idx===2});
@@ -494,7 +495,18 @@
       lastRegion=opts.label;
       text+=`${opts.label}: ${line||'(none)'}\n`;
       candidates=detectPrintedIds(line);
-      if(candidates.length)break;
+      if(candidates.length){
+        if(quick&&idx<2){
+          // Verify the candidate in a second OCR crop of this same frame.
+          const verify=ocrCrop(canvas,{...regions[idx+1],highContrast:idx+1===2});
+          const second=await worker.recognize(verify);
+          const secondText=String(second?.data?.text||'').trim();
+          const secondIds=detectPrintedIds(secondText);
+          text+=`verify: ${secondText||'(none)'}\n`;
+          confirmedInFrame=secondIds.some(v=>candidates.includes(v));
+        }
+        break;
+      }
     }
     // Manual Capture can afford a fallback that searches more of the frame.
     if(!candidates.length&&!quick){
@@ -504,7 +516,7 @@
       text+=`whole image: ${line||'(none)'}\n`;
       candidates=detectPrintedIds(line);
     }
-    return {ids:candidates,text:text.trim(),lastRegion};
+    return {ids:candidates,text:text.trim(),lastRegion,confirmedInFrame};
   }
   // Keep a candidate briefly after an unreadable frame. On phones, the same
   // small code may alternate between crisp and blurry on consecutive readings.
@@ -535,20 +547,20 @@
     const session=scanner.session,token=scanner.scanToken;
     scanner.busy=true;scanner.autoAttempt++;
     updateScanButtons();setScanStatus('Reading the printed ID…');
-    let nextDelay=450;
+    let nextDelay=650;
     try{
       const canvas=visibleCameraCanvas(video,2100);
       const worker=await getOcrWorker();
       if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream)return;
       const result=await recognizeIdFrame(canvas,worker,{quick:true,attempt:scanner.autoAttempt,fromCamera:true});
-      if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
+      if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan'||!scanner.autoEnabled)return;
       let diagnostic=`Image analyzed: ${canvas.width}×${canvas.height}px.\n`+(result.text.trim()||'(no ID recognized)');
       let found=bestCandidate(result.ids),nameKey='';
       if(found){scanner.nameCandidates=[];scanner.detectedName='';}
       if(!found&&state.loaded){
         setScanStatus('ID unclear. Checking the card name…');
         const fallback=await recognizeNameFallback(canvas,worker,{fromCamera:true,quick:true});
-        if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan')return;
+        if(token!==scanner.scanToken||session!==scanner.session||!scanner.stream||state.view!=='scan'||!scanner.autoEnabled)return;
         found=fallback.id;
         scanner.nameCandidates=fallback.candidates||[];
         scanner.detectedName=fallback.name||'';
@@ -566,20 +578,21 @@
         recordAutoEvidence('');
         if(scanner.autoIgnoreId&&++scanner.autoClearFrames>=2)scanner.autoIgnoreId='';
         setScanStatus(scanner.autoCandidateHits?'Checking the previous reading — hold card steady…':'Searching for ID or name… Keep the card steady in the two windows.');
-        nextDelay=500;
+        nextDelay=650;
       }else{
         scanner.autoClearFrames=0;
         const hits=recordAutoEvidence(key);
+        const confirmed=Boolean(found&&result.confirmedInFrame&&catalogCard(found));
         // Require two successful matches within the recent window, even if an
         // unreadable frame occurred between them. A different ID resets votes.
         // Never save without confirmation, even after a strong OCR match.
-        if(hits>=2){
+        if(hits>=2||confirmed){
           scanner.autoPaused=true;clearAutoTimer();
           renderScanMatch(found,!found);
           setScanStatus(found?`Recognized ${found}. Confirm the card and storage box.`:`Recognized ${scanner.detectedName}. Select its card ID to confirm.`);
         }else{
           setScanStatus(found?`Checking ${found} (1/2)…`:`Checking ${scanner.detectedName} (1/2)…`);
-          nextDelay=180;
+          nextDelay=350;
         }
       }
     }catch(err){
@@ -1254,6 +1267,14 @@
     if(action==='flip-camera'){flipCamera();return;}
     if(action==='stop-camera'){stopCamera();updateScanButtons();setScanStatus('Camera stopped. You can start it again or choose a photo.');return;}
     if(action==='capture-card'){captureCard();return;}
+    if(action==='toggle-auto'){
+      scanner.autoEnabled=!scanner.autoEnabled;
+      localStorage.setItem(SCANNER_AUTO_KEY,scanner.autoEnabled?'on':'off');
+      clearAutoTimer();clearAutoProgress();scanner.scanToken++;
+      if(scanner.autoEnabled){scanner.autoPaused=false;setScanStatus('Automatic scanning enabled. Hold a card steady.');scheduleAutoScan(350);}
+      else {scanner.autoPaused=false;setScanStatus('Automatic scan disabled. Use Capture card for each card.');}
+      updateScanButtons();return;
+    }
     if(action==='scan-again'){resumeScanning({message:scanner.autoEnabled?'Looking for the next card automatically…':'Ready for another card. Use Capture once.'});return;}
     if(action==='confirm-restore'){toast('Direct backup restore is disabled in cloud-first v1.2.0 to protect the shared inventory. Contact the owner for a reviewed import.',true);return;}
     /* if(action==='confirm-restore'){
