@@ -1,1 +1,1 @@
-Grand Line Vault 1.2.4 — fixed NAME/ID windows and one reliable automatic scan mode.
+Grand Line Vault 1.2.5 — stronger automatic OCR, retained matches through blurry frames, unchanged cloud storage.
