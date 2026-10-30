@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 let source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-source=source.replace('  render();loadCatalog();',`  globalThis.__v120={initialData,normalizeData,diffData,normalizeCatalog,detectPrintedIds,findCardByName,addCopies,copyData,state,sync,persist,waitForCloudSave,establishCloud,readTable};`);
+source=source.replace('  render();loadCatalog();updateCloudBadge();',`  globalThis.__v120={initialData,normalizeData,diffData,normalizeCatalog,detectPrintedIds,findCardByName,addCopies,copyData,state,sync,persist,waitForCloudSave,establishCloud,readTable};`);
 const elements=new Map(), store={};
 const el=(x)=>{if(!elements.has(x))elements.set(x,{innerHTML:'',textContent:'',className:'',style:{},dataset:{},classList:{toggle(){},add(){},remove(){}},focus(){},addEventListener(){},setAttribute(){},querySelector(){return{focus(){}}},querySelectorAll(){return[]}});return elements.get(x)};
 const crypto=require('node:crypto').webcrypto;
