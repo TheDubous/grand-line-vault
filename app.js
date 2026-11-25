@@ -109,7 +109,7 @@
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
   const SCANNER_AUTO_KEY = 'grand-line-vault-auto-enabled';
   const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:localStorage.getItem(SCANNER_AUTO_KEY)!=='off', autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', colors:new Set(), set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', colors:new Set(), set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), deckAvailability:'all', deckValidOnly:false, deckMobileTab:'pool', deckPickOpen:false, deckPick:{deckId:'',checked:new Set()}, activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
   // v1.2: Supabase is the only editable source; localStorage is read-only cache.
@@ -869,6 +869,85 @@
     const warnings=d.cards.map(c=>({id:c.cardId,requested:reservedTotal(c.cardId),owned:ownedBaseQty(c.cardId)})).filter(x=>x.requested>x.owned);
     return warnings.length?`<div class="deck-draft">Reservation conflicts: ${warnings.map(x=>`${escapeHtml(x.id)} (${x.requested} reserved, ${x.owned} owned)`).join(' · ')}. This is a warning, not a block.</div>`:`<div class="deck-valid">Reservations fit your current inventory. Copies remain in their numbered boxes.</div>`;
   }
+
+  function deckCostCurve(deck){
+    const counts=new Map();
+    for(const line of deck.cards){
+      const cost=baseCatalogCard(line.cardId)?.cost;
+      const key=Number.isFinite(cost)&&cost>=0?String(cost):'?';
+      counts.set(key,(counts.get(key)||0)+line.qty);
+    }
+    const labels=[...counts.keys()].sort((a,b)=>a==='?'?1:b==='?'?-1:Number(a)-Number(b));
+    const high=Math.max(1,...counts.values());
+    return '<section class="deck-curve" aria-label="DON cost curve"><div class="deck-curve-heading"><strong>DON!! cost curve</strong><small>Number of cards at each cost</small></div>'+
+      (labels.length?'<div class="deck-curve-bars">'+labels.map(cost=>{
+        const n=counts.get(cost);
+        return '<div class="deck-curve-column" title="Cost '+escapeHtml(cost)+': '+n+' cards">'+
+          '<strong>'+n+'</strong><div class="deck-curve-track"><div class="deck-curve-bar" style="height:'+Math.round(100*n/high)+'%"></div></div><small>'+escapeHtml(cost)+'</small></div>';
+      }).join('')+'</div>':'<p class="hint">Add cards to see your curve.</p>')+'</section>';
+  }
+  function deckAvailabilityHtml(){
+    const selected=state.deckAvailability;
+    return '<div class="deck-availability"><label>Show cards <select class="select" id="deckAvailability">'+
+      [['all','All cards'],['owned','Only owned'],['available','Only unreserved / free']].map(item=>
+        '<option value="'+item[0]+'" '+(selected===item[0]?'selected':'')+'>'+item[1]+'</option>').join('')+
+      '</select></label><label class="deck-valid-filter"><input type="checkbox" id="deckValidColors" '+(state.deckValidOnly?'checked':'')+'> Compatible with Leader</label></div>';
+  }
+  // A pick list is a read-only allocation of deck requirements to physical records.
+  // No changes to shared inventory, box locations or reservations.
+  function buildDeckPickPlan(deck){
+    if(!deck)return {groups:[],missing:[],rows:[]};
+    const requests=[...(deck.leaderId?[{cardId:deck.leaderId,qty:1}]:[]),...deck.cards];
+    const groups=new Map(),missing=[];
+    for(const requirement of requests){
+      let remaining=requirement.qty;
+      const copies=state.data.entries.filter(e=>baseCardId(e.cardId)===baseCardId(requirement.cardId))
+        .sort((a,b)=>(locationById(a.locationId)?.name||'').localeCompare(locationById(b.locationId)?.name||'',undefined,{numeric:true})||a.slot.localeCompare(b.slot));
+      for(const entry of copies){
+        if(remaining<=0)break;
+        const count=Math.min(entry.qty,remaining);remaining-=count;
+        const key=entry.locationId;
+        if(!groups.has(key))groups.set(key,{id:key,name:locationById(key)?.name||'Unsorted',rows:[]});
+        groups.get(key).rows.push({
+          key:requirement.cardId+':'+entry.id,cardId:requirement.cardId,
+          name:baseCatalogCard(requirement.cardId)?.name||entry.name||requirement.cardId,
+          count,slot:entry.slot||''
+        });
+      }
+      if(remaining>0)missing.push({cardId:requirement.cardId,name:baseCatalogCard(requirement.cardId)?.name||requirement.cardId,count:remaining});
+    }
+    const sorted=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    return {groups:sorted,missing,rows:sorted.flatMap(g=>g.rows)};
+  }
+  function prepareDeckPanel(deck){
+    if(!state.deckPickOpen||!deck)return '';
+    if(state.deckPick.deckId!==deck.id)state.deckPick={deckId:deck.id,checked:new Set()};
+    const plan=buildDeckPickPlan(deck),picked=plan.rows.filter(r=>state.deckPick.checked.has(r.key)).length;
+    const percent=plan.rows.length?Math.round(100*picked/plan.rows.length):0;
+    const groups=plan.groups.map(g=>'<section class="pick-box"><h3>▣ '+escapeHtml(g.name)+' <small>'+g.rows.reduce((n,r)=>n+r.count,0)+' copies</small></h3>'+
+      g.rows.map(r=>'<label class="pick-row"><input type="checkbox" data-pick-key="'+escapeHtml(r.key)+'" '+(state.deckPick.checked.has(r.key)?'checked':'')+'>'+
+      '<span class="pick-row-name"><strong>'+escapeHtml(r.name)+'</strong><small>'+escapeHtml(r.cardId)+(r.slot?' · '+escapeHtml(r.slot):'')+'</small></span>'+
+      '<strong>'+r.count+'×</strong></label>').join('')+'</section>').join('');
+    const missing=plan.missing.length?'<div class="pick-missing"><strong>Missing physical cards</strong>'+
+      plan.missing.map(m=>'<p>'+m.count+'× '+escapeHtml(m.cardId)+' · '+escapeHtml(m.name)+'</p>').join('')+'</div>':'';
+    return '<section class="panel prepare-deck-panel" id="prepareDeckPanel"><div class="prepare-heading"><div><div class="overline">PHYSICAL PICK LIST</div><h2>Prepare '+escapeHtml(deck.name)+'</h2>'+
+      '<p class="hint">Take cards from each box and tick them off. This checklist does not move, reserve or delete inventory.</p></div>'+
+      '<div class="actions"><button class="button btn-outline small" type="button" data-action="deck-pick-reset">Reset checks</button>'+
+      '<button class="button btn-ghost small" type="button" data-action="deck-pick-close">Close</button></div></div>'+
+      '<div class="pick-progress"><strong id="pickProgressText">'+picked+'/'+plan.rows.length+' locations picked</strong>'+
+      '<div class="pick-progress-track"><div id="pickProgressFill" style="width:'+percent+'%"></div></div></div>'+
+      '<p class="hint">Virtual reservations in other decks may overlap. Check available copies before permanently assembling multiple decks.</p>'+
+      (groups||'<p class="hint">No owned cards for this deck yet.</p>')+missing+'</section>';
+  }
+  function updatePickProgress(){
+    const deck=selectedDeck();if(!deck||!state.deckPickOpen)return;
+    const rows=buildDeckPickPlan(deck).rows;
+    const picked=rows.filter(r=>state.deckPick.checked.has(r.key)).length;
+    const label=document.querySelector('#pickProgressText'),bar=document.querySelector('#pickProgressFill');
+    if(label)label.textContent=picked+'/'+rows.length+' locations picked';
+    if(bar)bar.style.width=(rows.length?Math.round(100*picked/rows.length):0)+'%';
+  }
+
   function decksView() {
     const d=selectedDeck();if(d)state.activeDeckId=d.id;
     const leader=d?baseCatalogCard(d.leaderId):null;
