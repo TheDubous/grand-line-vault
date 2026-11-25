@@ -97,7 +97,7 @@
       if(seenPresets.has(id))continue;seenPresets.add(id);
       const f=p.filters||{};
       const safeFilters={effect:String(f.effect||'').slice(0,300),effectMode:['all','any','phrase'].includes(f.effectMode)?f.effectMode:'all',effectTarget:['both','effect','trigger'].includes(f.effectTarget)?f.effectTarget:'both',trait:String(f.trait||'').slice(0,300),traitMode:f.traitMode==='all'?'all':'any',category:String(f.category||'all').slice(0,50),rarity:String(f.rarity||'all').slice(0,50),attribute:String(f.attribute||'all').slice(0,50),counter:String(f.counter||'all').slice(0,50),powerMin:String(f.powerMin||'').slice(0,15),powerMax:String(f.powerMax||'').slice(0,15),costs:Array.isArray(f.costs)?f.costs.map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<100):[],ownedOnly:Boolean(f.ownedOnly),sort:String(f.sort||'id'),hideVariants:Boolean(f.hideVariants)};
-      presets.push({id,name:String(p.name||'Unnamed preset').slice(0,80),query:String(p.query||'').slice(0,100),color:String(p.color||'all').slice(0,20),set:String(p.set||'all').slice(0,25),filters:safeFilters});
+      presets.push({id,name:String(p.name||'Unnamed preset').slice(0,80),query:String(p.query||'').slice(0,100),color:String(p.color||'all').slice(0,20),colors:Array.isArray(p.colors)?p.colors.filter(x=>['Red','Green','Blue','Purple','Black','Yellow'].includes(x)).slice(0,6):[],set:String(p.set||'all').slice(0,25),filters:safeFilters});
     }
     return {version:1,locations:locs,entries,decks,presets};
   }
@@ -109,7 +109,7 @@
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
   const SCANNER_AUTO_KEY = 'grand-line-vault-auto-enabled';
   const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:localStorage.getItem(SCANNER_AUTO_KEY)!=='off', autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', colors:new Set(), set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
   // v1.2: Supabase is the only editable source; localStorage is read-only cache.
@@ -756,6 +756,14 @@
   const ownedBaseQty = id => state.data.entries.reduce((n,e)=>n+(baseCardId(e.cardId)===baseCardId(id)?e.qty:0),0);
   const selectedDeck = () => state.data.decks.find(d=>d.id===state.activeDeckId) || state.data.decks[0] || null;
   const baseCatalogCard = id => state.catalog.find(c=>c.id===baseCardId(id)) || state.catalog.find(c=>baseCardId(c.id)===baseCardId(id));
+
+  const COLOR_OPTIONS=['Red','Green','Blue','Purple','Black','Yellow'];
+  function colorFilterHtml(){
+    return `<div class="color-filter" role="group" aria-label="Filter by card colors">
+      <div class="color-filter-heading"><strong>Colors</strong><small>Choose several — shows cards with any selected color</small></div>
+      <div class="color-filter-options">${COLOR_OPTIONS.map(c=>`<label class="color-chip" data-color="${c}"><input type="checkbox" data-filter-color="${c}" ${state.colors.has(c)?'checked':''}><span>${c}</span></label>`).join('')}
+      <button type="button" class="button btn-ghost tiny" data-action="clear-colors">All colors</button></div></div>`;
+  }
   const selectedOption = (value,current) => value===current?'selected':'';
   const selectOptions=(values,current,allLabel='Any')=>`<option value="all">${allLabel}</option>${values.map(v=>`<option value="${escapeHtml(v)}" ${selectedOption(v,current)}>${escapeHtml(v)}</option>`).join('')}`;
   const allTraits = () => [...new Set(state.catalog.flatMap(c=>c.types))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
