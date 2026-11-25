@@ -1052,8 +1052,76 @@
     `<div class="location-cards">${state.data.locations.map(l=>`<article class="location-card"><div class="storage-icon">${types[l.kind]||types.Other}</div><h3>${escapeHtml(l.name)}</h3><div class="location-caption">${escapeHtml(l.note||'No description yet.')}</div><div class="location-count">${fmt(entryCounts(l.id))} <span class="muted" style="font:12px system-ui">copies</span></div><div class="actions"><button class="button btn-outline tiny" data-action="filter-location" data-id="${escapeHtml(l.id)}">View cards</button><button class="button btn-ghost tiny" data-action="edit-location" data-id="${escapeHtml(l.id)}">Edit</button>${l.id!==DEFAULT_LOCATION_ID?`<button class="button btn-danger tiny" data-action="remove-location" data-id="${escapeHtml(l.id)}">Delete</button>`:''}</div></article>`).join('')}</div><p class="help-note">Tip: Box numbers are automatically assigned when you press Next numbered box. Previous binder/slot information is preserved during upgrades.</p>`;
   }
 
-  function modal(body) { modalLayer.innerHTML=`<div class="modal-overlay" id="modalOverlay"><section class="modal" role="dialog" aria-modal="true" aria-label="Collection dialog"><button type="button" class="modal-close" data-action="close-modal" aria-label="Close dialog">×</button>${body}</section></div>`; const focus=modalLayer.querySelector('input:not([type=hidden]),textarea,select'); if (focus) focus.focus(); }
+  function modal(body,wide=false) { hideCardHover(); modalLayer.innerHTML=`<div class="modal-overlay" id="modalOverlay"><section class="modal ${wide?'modal-wide':''}" role="dialog" aria-modal="true" aria-label="Collection dialog"><button type="button" class="modal-close" data-action="close-modal" aria-label="Close dialog">×</button>${body}</section></div>`; const focus=modalLayer.querySelector('input:not([type=hidden]),textarea,select'); if (focus) focus.focus(); }
   const closeModal=()=>{modalLayer.innerHTML='';};
+
+  // Read-only card detail shared by catalog, inventory and deck builder.
+  function openCardDetail(cardId){
+    const id=baseCardId(safeId(cardId)),card=baseCatalogCard(id);
+    const rows=state.data.entries.filter(e=>baseCardId(e.cardId)===id);
+    const owned=rows.reduce((sum,e)=>sum+e.qty,0),reserved=reservedTotal(id);
+    const deck=selectedDeck(),included=deck?.cards.find(e=>e.cardId===id)?.qty||0;
+    const name=card?.name||rows[0]?.name||id, art=card?.image||imageUrl(id);
+    const props=card?[
+      ['Type',card.category],['Colors',card.colors],['Cost',card.cost??'—'],
+      ['Power',card.power??'—'],['Counter',card.counter??'—'],
+      ['Attribute',card.attributes.join(' / ')],['Crew / traits',card.types.join(' / ')]
+    ]:[];
+    const meta=props.map(pair=>'<div><dt>'+escapeHtml(pair[0])+'</dt><dd>'+escapeHtml(pair[1]||'—')+'</dd></div>').join('');
+    const locations=rows.length?rows.map(row=>
+      '<div><strong>'+escapeHtml(locationById(row.locationId)?.name||'Unsorted')+'</strong>'+
+      (row.slot?'<small>'+escapeHtml(row.slot)+'</small>':'')+
+      '<span>'+fmt(row.qty)+'×</span></div>').join(''):'<p class="hint">Not in your physical inventory.</p>';
+    const deckAction=deck?'<button class="button btn-primary small" type="button" data-action="detail-add-deck" data-id="'+escapeHtml(id)+'"'+
+      (card?.category!=='Leader'&&included>=4?' disabled':'')+'>'+
+      (card?.category==='Leader'?'Set as Leader':'＋ Add to deck ('+included+'/4)')+'</button>':'';
+    modal('<div class="card-detail"><div class="card-detail-art"><img loading="lazy" src="'+escapeHtml(art)+'" alt="Artwork for '+escapeHtml(name)+'"></div>'+
+      '<div class="card-detail-info"><div class="overline">CARD DETAILS · '+escapeHtml(id)+'</div><h2>'+escapeHtml(name)+'</h2>'+
+      '<div class="card-detail-totals"><span><strong>'+fmt(owned)+'×</strong> owned</span><span><strong>'+fmt(reserved)+'×</strong> reserved</span><span><strong>'+fmt(Math.max(0,owned-reserved))+'×</strong> free</span></div>'+
+      (meta?'<dl class="card-detail-metadata">'+meta+'</dl>':'')+
+      (card?.effect?'<div class="card-detail-effect"><strong>Effect</strong><p>'+escapeHtml(card.effect)+'</p></div>':'')+
+      (card?.trigger?'<div class="card-detail-effect"><strong>Trigger</strong><p>'+escapeHtml(card.trigger)+'</p></div>':'')+
+      '<h3>Physical storage</h3><div class="card-detail-locations">'+locations+'</div>'+
+      '<div class="card-detail-actions">'+deckAction+
+      '<button type="button" class="button btn-outline small" data-action="detail-add-copy" data-id="'+escapeHtml(id)+'">＋ Add copies</button>'+
+      '<button type="button" class="button btn-outline small" data-action="detail-show-inventory" data-id="'+escapeHtml(id)+'">View / move copies</button></div></div></div>',true);
+  }
+  let hoverCardEl=null;
+  function hideCardHover(){if(hoverCardEl)hoverCardEl.hidden=true;}
+  function positionCardHover(x,y){
+    if(!hoverCardEl)return;
+    hoverCardEl.style.left=Math.max(8,Math.min(window.innerWidth-290,x+18))+'px';
+    hoverCardEl.style.top=Math.max(8,Math.min(window.innerHeight-440,y+16))+'px';
+  }
+  function showCardHover(id,x,y){
+    if(!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches||modalLayer.childElementCount)return;
+    const c=baseCatalogCard(id),img=c?.image||imageUrl(id);
+    if(!hoverCardEl){hoverCardEl=document.createElement('div');hoverCardEl.className='card-hover-preview';hoverCardEl.setAttribute('aria-hidden','true');document.body.appendChild(hoverCardEl);}
+    if(hoverCardEl.dataset.card!==id){
+      hoverCardEl.innerHTML='<img src="'+escapeHtml(img)+'" alt=""><div><strong>'+escapeHtml(c?.name||id)+'</strong><small>'+escapeHtml(id)+' · Click for details</small></div>';
+      hoverCardEl.dataset.card=id;
+    }
+    hoverCardEl.hidden=false;positionCardHover(x,y);
+  }
+  document.addEventListener('pointerover',e=>{
+    if(e.pointerType!=='mouse')return;
+    const target=e.target.closest?.('[data-card-preview]');
+    if(target)showCardHover(target.dataset.cardPreview,e.clientX,e.clientY);
+  });
+  document.addEventListener('pointermove',e=>{
+    if(e.pointerType==='mouse'&&hoverCardEl&&!hoverCardEl.hidden)positionCardHover(e.clientX,e.clientY);
+  });
+  document.addEventListener('pointerout',e=>{
+    const target=e.target.closest?.('[data-card-preview]');
+    if(target&&!target.contains(e.relatedTarget))hideCardHover();
+  });
+  document.addEventListener('scroll',hideCardHover,true);
+  document.addEventListener('keydown',e=>{
+    if((e.key==='Enter'||e.key===' ')&&e.target.matches?.('[data-card-preview]')){
+      e.preventDefault();openCardDetail(e.target.dataset.cardPreview);
+    }
+  });
+
   function openAdd(card) {
     const existing = card || {};
     modal(`<h2>Add to collection</h2><p class="subhead">Save copies of a card and the precise place you keep them.</p><form data-form="add-entry"><div class="form-fields"><label>Card ID<input class="field" name="cardId" maxlength="40" required placeholder="OP05-002" value="${escapeHtml(existing.id||'')}" /></label><label>Card name<input class="field" name="name" maxlength="150" required placeholder="Character name" value="${escapeHtml(existing.name||'')}" /></label><div class="quick-stats">${badgeColor(existing.rarity||'Manual entry')} ${escapeHtml(existing.colors||'')}</div><label>Number of copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Storage location<select class="select" name="locationId">${locationOptions('unsorted')}</select></label><label>Exact position (optional)<input class="field" name="slot" maxlength="100" placeholder="Page 2 / Pocket 7 or Row B" /></label><label>Notes (optional)<textarea name="note" maxlength="1000" placeholder="Condition, language, sleeves, etc."></textarea></label><input name="rarity" type="hidden" value="${escapeHtml(existing.rarity||'')}" /><input name="colors" type="hidden" value="${escapeHtml(existing.colors||'')}" /></div><div class="modal-actions"><button class="button btn-ghost" type="button" data-action="close-modal">Cancel</button><button class="button btn-primary" type="submit">Save cards</button></div></form>`);
