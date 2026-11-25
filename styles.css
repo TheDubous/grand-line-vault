@@ -411,3 +411,109 @@ a{color:#915575}
   .bulk-selection-bar strong,.bulk-selection-bar .hint{width:100%;margin:0;}
   .bulk-selection-bar .button{flex:1;min-width:120px;white-space:normal;}
 }
+
+
+/* Grand Line Vault v1.3.0 — color choices, image preview and deck studio */
+.color-filter{margin:0 0 17px;padding:12px 14px;background:#11243a;border:1px solid #344a63;border-radius:12px}
+.color-filter-heading{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
+.color-filter-heading small{font-size:11px;color:#9cacc0}
+.color-filter-options{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.color-chip{cursor:pointer;display:inline-flex;align-items:center;position:relative}
+.color-chip input{position:absolute;opacity:0;width:1px;height:1px}
+.color-chip span{display:inline-flex;align-items:center;justify-content:center;min-width:63px;padding:9px 11px;border:1px solid #52677e;border-radius:10px;color:#d4e0ee;background:#1b2c42;font-size:12px;font-weight:750}
+.color-chip input:checked+span{color:#111c2a;background:#f1dba5;border-color:#ffcb68;box-shadow:0 0 0 2px #ffcb6840}
+.color-chip input:focus-visible+span{outline:3px solid #85c9ff;outline-offset:3px}
+.color-chip[data-color="Red"] input:checked+span{background:#f3a3ac;border-color:#f18b94}
+.color-chip[data-color="Green"] input:checked+span{background:#94e5bc;border-color:#75cda3}
+.color-chip[data-color="Blue"] input:checked+span{background:#99cdfc;border-color:#72abdf}
+.color-chip[data-color="Purple"] input:checked+span{background:#c5aceb;border-color:#aa87da}
+.color-chip[data-color="Black"] input:checked+span{background:#b6becb;border-color:#8995a7}
+.color-chip[data-color="Yellow"] input:checked+span{background:#f4d278;border-color:#e9bd56}
+.preview-trigger{cursor:zoom-in}
+.preview-trigger:focus-visible{outline:3px solid #f7c45d;outline-offset:3px}
+.card-hover-preview{position:fixed;z-index:70;pointer-events:none;width:276px;background:#0b182a;border:1px solid #b98d4a;border-radius:13px;padding:9px;box-shadow:0 20px 55px #000b}
+.card-hover-preview[hidden]{display:none}
+.card-hover-preview img{display:block;width:100%;height:350px;object-fit:contain;background:#152438;border-radius:8px}
+.card-hover-preview div{display:flex;flex-direction:column;gap:4px;padding:9px 5px 3px}
+.card-hover-preview strong{font-size:13px;color:#f9e5b2;overflow-wrap:anywhere}
+.card-hover-preview small{font-size:11px;color:#acbfd1}
+.modal.modal-wide{width:min(875px,100%)}
+.card-detail{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(260px,1.2fr);gap:24px;align-items:start}
+.card-detail-art img{width:100%;max-height:540px;object-fit:contain;background:#15263c;border:1px solid #40536b;border-radius:11px}
+.card-detail-info h2{font-size:27px;margin:8px 0 13px}
+.card-detail-totals{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 15px}
+.card-detail-totals span{display:grid;gap:4px;padding:9px 12px;border:1px solid #344a61;border-radius:10px;background:#172b40;font-size:11px;color:#a7bcd0}
+.card-detail-totals strong{color:#f5d696;font-size:17px}
+.card-detail-metadata{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:12px 0 17px}
+.card-detail-metadata div{padding:8px 10px;border:1px solid #2d4159;border-radius:8px}
+.card-detail-metadata dt{font-size:10px;color:#9aaec3;margin-bottom:4px}
+.card-detail-metadata dd{font-size:12px;color:#f3f6fa;margin:0;overflow-wrap:anywhere}
+.card-detail-effect{margin:10px 0;padding:12px;background:#1b3146;border-radius:9px}
+.card-detail-effect strong{color:#e5bd74;font-size:12px}
+.card-detail-effect p{font-size:12px;white-space:pre-line;line-height:1.6;margin:7px 0 0}
+.card-detail-info h3{font-size:14px;margin:15px 0 8px}
+.card-detail-locations{display:grid;gap:5px}
+.card-detail-locations>div{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:7px 0;border-bottom:1px solid #31455c;font-size:12px}
+.card-detail-locations small{color:#8fa4bc}
+.card-detail-locations span{margin-left:auto;color:#f2d594;font-weight:700}
+.card-detail-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}
+.deck-studio-layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(340px,.9fr);gap:18px;align-items:start}
+.deck-studio-layout .deck-card-pool{grid-column:1;grid-row:1;min-width:0;max-height:85vh;overflow-y:auto;overscroll-behavior:contain}
+.deck-studio-layout .deck-workspace{grid-column:2;grid-row:1;min-width:0;max-height:85vh;overflow-y:auto;overscroll-behavior:contain;margin-bottom:0}
+.deck-studio-switch{display:none}
+.deck-studio-layout .deck-pool-grid{grid-template-columns:repeat(auto-fit,minmax(205px,1fr))}
+.deck-studio-layout .deck-toolbar .actions{gap:6px}
+.deck-availability{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.deck-availability label{font-size:12px;color:#afc2d5;font-weight:650}
+.deck-availability .select{padding:9px 10px;margin-left:7px;min-width:155px}
+.deck-valid-filter{display:inline-flex;align-items:center;gap:6px}
+.deck-valid-filter input{accent-color:#f7c45d;width:17px;height:17px}
+.deck-curve{padding:12px;background:#16283b;border:1px solid #354c61;border-radius:11px;margin:16px 0}
+.deck-curve-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px}
+.deck-curve-heading small{color:#9cafc1}
+.deck-curve-bars{display:flex;align-items:end;gap:8px;overflow-x:auto;padding-top:12px}
+.deck-curve-column{display:grid;grid-template-rows:auto 75px auto;gap:3px;min-width:29px;flex:1;text-align:center}
+.deck-curve-column>strong{font-size:11px;color:#f2d58b}
+.deck-curve-column>small{font-size:10px;color:#b6c8d9}
+.deck-curve-track{display:flex;align-items:end;border-radius:4px;background:#263b52;overflow:hidden}
+.deck-curve-bar{width:100%;border-radius:4px 4px 0 0;background:#dbb56e}
+.prepare-deck-panel{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-bottom:20px}
+.prepare-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;grid-column:1/-1}
+.prepare-heading h2{font-family:Georgia,serif;font-size:26px;margin:5px 0}
+.prepare-heading .hint{max-width:720px}
+.pick-progress{grid-column:1/-1;display:grid;gap:8px}
+.pick-progress-track{height:9px;background:#27384f;border-radius:99px;overflow:hidden}
+.pick-progress-track>div{height:100%;background:#62c69c;border-radius:99px;transition:width .2s ease}
+.prepare-deck-panel>.hint{grid-column:1/-1}
+.pick-box{border:1px solid #364e65;border-radius:12px;background:#17283b;padding:12px;min-width:0}
+.pick-box h3{display:flex;justify-content:space-between;gap:9px;font-size:14px}
+.pick-box h3 small{color:#aec0d2;font-size:11px}
+.pick-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid #2e4359;cursor:pointer}
+.pick-row input{accent-color:#69d3aa;width:18px;height:18px;flex-shrink:0}
+.pick-row-name{flex:1;display:grid;gap:3px;min-width:0}
+.pick-row-name strong{font-size:12px;overflow-wrap:anywhere}
+.pick-row-name small{font-size:10px;color:#94acc4;overflow-wrap:anywhere}
+.pick-row>strong{color:#f0d58d}
+.pick-row:has(input:checked) .pick-row-name{text-decoration:line-through;opacity:.62}
+.pick-missing{border:1px solid #c88b83;background:#472d39;border-radius:12px;padding:14px}
+.pick-missing strong{color:#ffe0af}
+.pick-missing p{font-size:12px;line-height:1.4}
+@media(max-width:1050px){
+ .deck-studio-layout{grid-template-columns:1fr 1fr;gap:12px}
+ .deck-studio-layout .deck-pool-grid{grid-template-columns:1fr}
+}
+@media(max-width:780px){
+ .deck-studio-layout{display:flex;flex-direction:column}
+ .deck-studio-layout .deck-card-pool,.deck-studio-layout .deck-workspace{width:100%;max-height:none;overflow:visible}
+ .deck-studio-switch{display:flex;gap:9px;width:100%}
+ .deck-studio-switch .button{flex:1}
+ .deck-studio-layout[data-mobile-tab="pool"] .deck-workspace{display:none}
+ .deck-studio-layout[data-mobile-tab="deck"] .deck-card-pool{display:none}
+ .deck-studio-layout[data-mobile-tab="pool"] [data-action="deck-tab-pool"],
+ .deck-studio-layout[data-mobile-tab="deck"] [data-action="deck-tab-deck"]{background:#f7c45d;color:#122338}
+ .deck-studio-layout .deck-pool-grid{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
+ .card-detail{grid-template-columns:1fr}
+ .card-detail-art{max-width:280px;margin:0 auto}
+ .card-detail-art img{max-height:390px}
+ .card-detail-metadata{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
