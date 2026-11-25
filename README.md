@@ -1,3 +1,15 @@
+## Grand Line Vault v1.3.0 — Card Explorer + Deck Studio (proposed)
+
+- Card art in the English catalog, inventory and deck builder supports desktop hover zoom, keyboard Enter/Space and tap/click for a full card-detail window.
+- The common detail shows card text, stats, traits, physical box/slot locations, owned/reserved/free counts, and shortcuts to add copies, open inventory or add to a deck.
+- Catalog and deck builder filters support **multiple color chips simultaneously** (matches any selected color). Saved filter presets retain this selection; older one-color presets still load.
+- Two-pane deck studio on wide screens, browse/deck tabs on narrow screens, a DON!! cost curve, and **All / Only owned / Only free** deck-pool filters with an optional Leader-color compatibility filter.
+- **Prepare deck** creates a read-only picking checklist grouped by box and slot, including the Leader and missing card copies. Ticking a card changes only temporary UI state; it does not subtract, reserve or move collection cards.
+- The optional storage-management ideas (QR box labels, box gallery, global command search) are deliberately **not** included.
+- Frontend only. No new Supabase SQL, migrations, table changes or account changes. Existing cards, decks, reservations and number boxes are preserved.
+- Before trying any future batch modifications, back up the shared inventory. Test the new UI on both desktop and iPhone before merging into main.
+
+
 ## v1.2.6 — scanner and bulk inventory (review release)
 
 - Wider NAME target: 88% of preview, unchanged fixed ID target.
