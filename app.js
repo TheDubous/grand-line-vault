@@ -801,7 +801,7 @@
     const sets=[...new Set(state.catalog.map(c=>setFrom(c.id)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
     const colors=['Red','Green','Blue','Purple','Black','Yellow'];
     return pageHeading('EXPLORE','Card catalog','Find cards by exact cost, crew, power, counter and effect text, then save them to your collection.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan card</button><button class="button btn-outline" data-action="open-custom">＋ Manual card</button></div>`)+
-    `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select><select class="select" id="catalogColor" aria-label="Filter color"><option value="all">All colors</option>${colors.map(c=>`<option value="${c}" ${c===state.color?'selected':''}>${c}</option>`).join('')}</select></div>
+    `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select></div>${colorFilterHtml()}
     ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div id="catalogSelectionTools"></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
   }
 
@@ -817,7 +817,7 @@
     const q=state.query.trim().toLowerCase().replaceAll(' ','');
     let cards=state.catalog.filter(c=>{
       if(q && !`${c.id} ${c.name}`.toLowerCase().replaceAll(' ','').includes(q))return false;
-      if(state.color!=='all' && !c.colors.toLowerCase().split(/\s*\/\s*/).includes(state.color.toLowerCase()))return false;
+      if(state.colors.size&&!c.colors.toLowerCase().split(/\s*\/\s*/).some(color=>state.colors.has(color[0].toUpperCase()+color.slice(1))))return false;
       if(state.set!=='all'&&setFrom(c.id)!==state.set)return false;
       if(f.category!=='all'&&c.category.toLowerCase()!==f.category.toLowerCase())return false;
       if(f.rarity!=='all'&&c.rarity!==f.rarity)return false;
@@ -884,7 +884,7 @@
       <h3>Main deck <span class="muted">(${sum})</span></h3>${deckListHtml(d)}</section>`:empty('♠','Create your first deck','Decks are saved independently of your collection. Your inventory is never consumed when you add a card to a deck.',`<div class="actions"><button class="button btn-primary" data-action="new-deck">＋ Create deck</button><button class="button btn-outline" data-action="import-deck">↑ Import a plan</button></div>`);
     return pageHeading('DECK WORKSHOP','Deck builder','Build from your collection or the English card catalog. Your decks survive app updates and backups.',`<div class="actions"><button class="button btn-outline" type="button" data-action="import-deck">↑ Import plan</button><button class="button btn-primary" type="button" data-action="new-deck">＋ New deck</button></div>`)+
       deckPanel+(d?`<section class="panel deck-card-pool"><div class="section-heading"><h2>Find cards for this deck</h2><span class="hint">Leader: click Set leader · Other cards: click + Add</span></div>
-      <div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search by card name / ID" value="${escapeHtml(state.query)}"></label><select id="catalogSet" class="select">${selectOptions(sets,state.set,'All sets')}</select><select id="catalogColor" class="select">${selectOptions(colors,state.color,'All colors')}</select></div>
+      <div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search by card name / ID" value="${escapeHtml(state.query)}"></label><select id="catalogSet" class="select">${selectOptions(sets,state.set,'All sets')}</select></div>${colorFilterHtml()}
       ${advancedFilters()}<div class="catalog-info"><span id="deckPoolCount"></span><span>Cards sharing a number count toward the same four-copy limit.</span></div><div class="deck-pool-grid" id="deckPool"></div><div id="deckPoolMore" class="text-center" style="padding:20px"></div></section>`:'');
   }
   function paintDeckPool() {
