@@ -97,7 +97,7 @@
       if(seenPresets.has(id))continue;seenPresets.add(id);
       const f=p.filters||{};
       const safeFilters={effect:String(f.effect||'').slice(0,300),effectMode:['all','any','phrase'].includes(f.effectMode)?f.effectMode:'all',effectTarget:['both','effect','trigger'].includes(f.effectTarget)?f.effectTarget:'both',trait:String(f.trait||'').slice(0,300),traitMode:f.traitMode==='all'?'all':'any',category:String(f.category||'all').slice(0,50),rarity:String(f.rarity||'all').slice(0,50),attribute:String(f.attribute||'all').slice(0,50),counter:String(f.counter||'all').slice(0,50),powerMin:String(f.powerMin||'').slice(0,15),powerMax:String(f.powerMax||'').slice(0,15),costs:Array.isArray(f.costs)?f.costs.map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<100):[],ownedOnly:Boolean(f.ownedOnly),sort:String(f.sort||'id'),hideVariants:Boolean(f.hideVariants)};
-      presets.push({id,name:String(p.name||'Unnamed preset').slice(0,80),query:String(p.query||'').slice(0,100),color:String(p.color||'all').slice(0,20),set:String(p.set||'all').slice(0,25),filters:safeFilters});
+      presets.push({id,name:String(p.name||'Unnamed preset').slice(0,80),query:String(p.query||'').slice(0,100),color:String(p.color||'all').slice(0,20),colors:Array.isArray(p.colors)?p.colors.filter(x=>['Red','Green','Blue','Purple','Black','Yellow'].includes(x)).slice(0,6):[],set:String(p.set||'all').slice(0,25),filters:safeFilters});
     }
     return {version:1,locations:locs,entries,decks,presets};
   }
@@ -109,7 +109,7 @@
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
   const SCANNER_AUTO_KEY = 'grand-line-vault-auto-enabled';
   const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:localStorage.getItem(SCANNER_AUTO_KEY)!=='off', autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', colors:new Set(), set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), deckAvailability:'all', deckValidOnly:false, deckMobileTab:'pool', deckPickOpen:false, deckPick:{deckId:'',checked:new Set()}, activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
   // v1.2: Supabase is the only editable source; localStorage is read-only cache.
@@ -223,7 +223,7 @@
   const pageHeading = (label,title,description,button='') => `<div class="headerline"><div><div class="overline">${escapeHtml(label)}</div><h1>${escapeHtml(title)}</h1><p class="subhead">${escapeHtml(description)}</p></div>${button}</div>`;
   const empty = (icon,title,description,button='') => `<div class="empty"><div class="empty-icon">${icon}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p>${button}</div>`;
   const pill = (id) => `<span class="location-pill">${escapeHtml(locationById(id)?.name || 'Unsorted')}</span>`;
-  const miniImg = (id) => `<img class="card-mini" loading="lazy" src="${escapeHtml(catalogCard(id)?.image||imageUrl(id))}" alt=""/>`;
+  const miniImg = (id) => `<img class="card-mini preview-trigger" data-card-preview="${escapeHtml(baseCardId(id))}" data-action="card-detail" data-id="${escapeHtml(baseCardId(id))}" role="button" tabindex="0" loading="lazy" src="${escapeHtml(catalogCard(id)?.image||imageUrl(id))}" alt=""/>`;
   const cardMeta = card => [card.rarity,card.colors || ''].filter(Boolean).join(' · ') || card.category || 'One Piece TCG';
 
 
@@ -756,6 +756,14 @@
   const ownedBaseQty = id => state.data.entries.reduce((n,e)=>n+(baseCardId(e.cardId)===baseCardId(id)?e.qty:0),0);
   const selectedDeck = () => state.data.decks.find(d=>d.id===state.activeDeckId) || state.data.decks[0] || null;
   const baseCatalogCard = id => state.catalog.find(c=>c.id===baseCardId(id)) || state.catalog.find(c=>baseCardId(c.id)===baseCardId(id));
+
+  const COLOR_OPTIONS=['Red','Green','Blue','Purple','Black','Yellow'];
+  function colorFilterHtml(){
+    return `<div class="color-filter" role="group" aria-label="Filter by card colors">
+      <div class="color-filter-heading"><strong>Colors</strong><small>Choose several — shows cards with any selected color</small></div>
+      <div class="color-filter-options">${COLOR_OPTIONS.map(c=>`<label class="color-chip" data-color="${c}"><input type="checkbox" data-filter-color="${c}" ${state.colors.has(c)?'checked':''}><span>${c}</span></label>`).join('')}
+      <button type="button" class="button btn-ghost tiny" data-action="clear-colors">All colors</button></div></div>`;
+  }
   const selectedOption = (value,current) => value===current?'selected':'';
   const selectOptions=(values,current,allLabel='Any')=>`<option value="all">${allLabel}</option>${values.map(v=>`<option value="${escapeHtml(v)}" ${selectedOption(v,current)}>${escapeHtml(v)}</option>`).join('')}`;
   const allTraits = () => [...new Set(state.catalog.flatMap(c=>c.types))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
@@ -793,7 +801,7 @@
     const sets=[...new Set(state.catalog.map(c=>setFrom(c.id)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
     const colors=['Red','Green','Blue','Purple','Black','Yellow'];
     return pageHeading('EXPLORE','Card catalog','Find cards by exact cost, crew, power, counter and effect text, then save them to your collection.',`<div class="actions"><button class="button btn-primary" data-view="scan" type="button">◎ Scan card</button><button class="button btn-outline" data-action="open-custom">＋ Manual card</button></div>`)+
-    `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select><select class="select" id="catalogColor" aria-label="Filter color"><option value="all">All colors</option>${colors.map(c=>`<option value="${c}" ${c===state.color?'selected':''}>${c}</option>`).join('')}</select></div>
+    `<div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search card name / ID" value="${escapeHtml(state.query)}" aria-label="Search cards" /></label><select id="catalogSet" class="select" aria-label="Filter set"><option value="all">All sets</option>${sets.map(s=>`<option value="${escapeHtml(s)}" ${s===state.set?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select></div>${colorFilterHtml()}
     ${advancedFilters()}<div class="panel" style="margin-bottom:16px"><h3>English catalog health</h3><p class="hint">${state.loaded?`${fmt(state.catalog.length)} distinct English card IDs loaded · ${fmt(state.catalog.filter(c=>!!c.image).length)} image links supplied · Checked ${escapeHtml(state.catalogLoadedAt||'now')}`:`Catalog unavailable / loading. ${escapeHtml(state.catalogError||'')}`}. This count is not proof that every released card is present; use the official English card list if a scan cannot find a card.</p></div><div class="catalog-info"><span id="catalogCount"></span><span>Source: community-maintained English card catalog; artwork belongs to its owners.</span></div><div id="catalogSelectionTools"></div><div class="catalog-grid" id="catalogGrid"></div><div id="catalogMore" class="text-center" style="padding:24px"></div>`;
   }
 
@@ -809,7 +817,7 @@
     const q=state.query.trim().toLowerCase().replaceAll(' ','');
     let cards=state.catalog.filter(c=>{
       if(q && !`${c.id} ${c.name}`.toLowerCase().replaceAll(' ','').includes(q))return false;
-      if(state.color!=='all' && !c.colors.toLowerCase().split(/\s*\/\s*/).includes(state.color.toLowerCase()))return false;
+      if(state.colors.size&&!c.colors.toLowerCase().split(/\s*\/\s*/).some(color=>state.colors.has(color[0].toUpperCase()+color.slice(1))))return false;
       if(state.set!=='all'&&setFrom(c.id)!==state.set)return false;
       if(f.category!=='all'&&c.category.toLowerCase()!==f.category.toLowerCase())return false;
       if(f.rarity!=='all'&&c.rarity!==f.rarity)return false;
@@ -836,7 +844,7 @@
     const results=filteredCatalog();const shown=results.slice(0,state.perPage);
     document.querySelector('#catalogCount').textContent=`${fmt(results.length)} printings found ${!state.loaded?'· limited offline preview':''}`;
     document.querySelector('#catalogSelectionTools').innerHTML=bulkSelectionTools('catalog');
-    document.querySelector('#catalogGrid').innerHTML=shown.length?shown.map(c=>`<article class="card-tile"><label class="catalog-select-label"><input type="checkbox" data-select-catalog="${escapeHtml(baseCardId(c.id))}" ${state.bulkCatalogIds.has(baseCardId(c.id))?'checked':''}> Select</label><div class="card-art"><img loading="lazy" src="${escapeHtml(c.image || imageUrl(c.id))}" alt="Artwork for ${escapeHtml(c.name)}"/><span class="art-id">${escapeHtml(c.id)}</span></div><div class="card-body"><strong title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</strong><div class="meta">${escapeHtml(cardMeta(c))}<div>Cost ${c.cost??'—'} · Power ${c.power??'—'} · Counter ${c.counter===null?'—':c.counter}</div>${c.types.length?`<div title="${escapeHtml(c.types.join(', '))}">${escapeHtml(c.types.join(' · '))}</div>`:''}</div><button type="button" class="button btn-primary small" data-action="add-card" data-id="${escapeHtml(c.id)}">＋ Add to collection</button><div class="owned">${qtyFor(c.id)?`${fmt(qtyFor(c.id))} owned`:'Not yet in your collection'}</div></div></article>`).join('') : empty('⌕','No matching cards','Try removing a filter or searching another effect.',`<button class="button btn-outline" data-action="clear-filters">Clear filters</button>`);
+    document.querySelector('#catalogGrid').innerHTML=shown.length?shown.map(c=>`<article class="card-tile"><label class="catalog-select-label"><input type="checkbox" data-select-catalog="${escapeHtml(baseCardId(c.id))}" ${state.bulkCatalogIds.has(baseCardId(c.id))?'checked':''}> Select</label><div class="card-art"><img class="preview-trigger" data-card-preview="${escapeHtml(baseCardId(c.id))}" data-action="card-detail" data-id="${escapeHtml(baseCardId(c.id))}" role="button" tabindex="0" loading="lazy" src="${escapeHtml(c.image || imageUrl(c.id))}" alt="Artwork for ${escapeHtml(c.name)}"/><span class="art-id">${escapeHtml(c.id)}</span></div><div class="card-body"><strong title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</strong><div class="meta">${escapeHtml(cardMeta(c))}<div>Cost ${c.cost??'—'} · Power ${c.power??'—'} · Counter ${c.counter===null?'—':c.counter}</div>${c.types.length?`<div title="${escapeHtml(c.types.join(', '))}">${escapeHtml(c.types.join(' · '))}</div>`:''}</div><button type="button" class="button btn-primary small" data-action="add-card" data-id="${escapeHtml(c.id)}">＋ Add to collection</button><div class="owned">${qtyFor(c.id)?`${fmt(qtyFor(c.id))} owned`:'Not yet in your collection'}</div></div></article>`).join('') : empty('⌕','No matching cards','Try removing a filter or searching another effect.',`<button class="button btn-outline" data-action="clear-filters">Clear filters</button>`);
     document.querySelector('#catalogMore').innerHTML=shown.length<results.length?`<button class="button btn-outline" type="button" data-action="more-cards">Show more (${fmt(results.length-shown.length)} remaining)</button>`:'';
   }
 
@@ -853,7 +861,7 @@
     const entries=[...d.cards].sort((a,b)=>(baseCatalogCard(a.cardId)?.cost??100)-(baseCatalogCard(b.cardId)?.cost??100)||a.cardId.localeCompare(b.cardId));
     return entries.length?`<div class="deck-entries">${entries.map(c=>{
       const card=baseCatalogCard(c.cardId);const owned=ownedBaseQty(c.cardId);
-      return `<div class="deck-row"><img loading="lazy" src="${escapeHtml(card?.image||imageUrl(c.cardId))}" alt=""/><div class="deck-card-name"><strong>${escapeHtml(card?.name||c.cardId)}</strong><small>${escapeHtml(c.cardId)} · Cost ${card?.cost??'—'} · <span class="${owned<c.qty?'deck-missing':''}">${owned} owned / ${c.qty} needed</span><br/><span title="${escapeHtml(physicalLocations(c.cardId))}">${escapeHtml(physicalLocations(c.cardId))}</span>${reservedTotal(c.cardId)?`<br/><span title="${escapeHtml(reservedSummary(c.cardId))}">Reserved: ${reservedTotal(c.cardId)} · Free: ${freeQty(c.cardId)}</span>`:''}</small></div><div class="quantity-ctrl"><button data-action="deck-minus" data-id="${escapeHtml(c.cardId)}" title="Remove one">−</button><strong>${c.qty}</strong><button data-action="deck-plus" data-id="${escapeHtml(c.cardId)}" title="Add one" ${c.qty>=4?'disabled':''}>+</button></div></div>`;
+      return `<div class="deck-row"><img class="preview-trigger" data-card-preview="${escapeHtml(c.cardId)}" data-action="card-detail" data-id="${escapeHtml(c.cardId)}" role="button" tabindex="0" loading="lazy" src="${escapeHtml(card?.image||imageUrl(c.cardId))}" alt=""/><div class="deck-card-name"><strong>${escapeHtml(card?.name||c.cardId)}</strong><small>${escapeHtml(c.cardId)} · Cost ${card?.cost??'—'} · <span class="${owned<c.qty?'deck-missing':''}">${owned} owned / ${c.qty} needed</span><br/><span title="${escapeHtml(physicalLocations(c.cardId))}">${escapeHtml(physicalLocations(c.cardId))}</span>${reservedTotal(c.cardId)?`<br/><span title="${escapeHtml(reservedSummary(c.cardId))}">Reserved: ${reservedTotal(c.cardId)} · Free: ${freeQty(c.cardId)}</span>`:''}</small></div><div class="quantity-ctrl"><button data-action="deck-minus" data-id="${escapeHtml(c.cardId)}" title="Remove one">−</button><strong>${c.qty}</strong><button data-action="deck-plus" data-id="${escapeHtml(c.cardId)}" title="Add one" ${c.qty>=4?'disabled':''}>+</button></div></div>`;
     }).join('')}</div>`:empty('♠','No cards in this deck yet','Choose a Leader, then add Characters, Events and Stages from the filtered card pool.');
   }
   function reservationWarnings(d){
@@ -861,6 +869,86 @@
     const warnings=d.cards.map(c=>({id:c.cardId,requested:reservedTotal(c.cardId),owned:ownedBaseQty(c.cardId)})).filter(x=>x.requested>x.owned);
     return warnings.length?`<div class="deck-draft">Reservation conflicts: ${warnings.map(x=>`${escapeHtml(x.id)} (${x.requested} reserved, ${x.owned} owned)`).join(' · ')}. This is a warning, not a block.</div>`:`<div class="deck-valid">Reservations fit your current inventory. Copies remain in their numbered boxes.</div>`;
   }
+
+  function deckCostCurve(deck){
+    const counts=new Map();
+    for(const line of deck.cards){
+      const cost=baseCatalogCard(line.cardId)?.cost;
+      const key=Number.isFinite(cost)&&cost>=0?String(cost):'?';
+      counts.set(key,(counts.get(key)||0)+line.qty);
+    }
+    const labels=[...counts.keys()].sort((a,b)=>a==='?'?1:b==='?'?-1:Number(a)-Number(b));
+    const high=Math.max(1,...counts.values());
+    return '<section class="deck-curve" aria-label="DON cost curve"><div class="deck-curve-heading"><strong>DON!! cost curve</strong><small>Number of cards at each cost</small></div>'+
+      (labels.length?'<div class="deck-curve-bars">'+labels.map(cost=>{
+        const n=counts.get(cost);
+        return '<div class="deck-curve-column" title="Cost '+escapeHtml(cost)+': '+n+' cards">'+
+          '<strong>'+n+'</strong><div class="deck-curve-track"><div class="deck-curve-bar" style="height:'+Math.round(100*n/high)+'%"></div></div><small>'+escapeHtml(cost)+'</small></div>';
+      }).join('')+'</div>':'<p class="hint">Add cards to see your curve.</p>')+'</section>';
+  }
+  function deckAvailabilityHtml(){
+    const selected=state.deckAvailability;
+    return '<div class="deck-availability"><label>Show cards <select class="select" id="deckAvailability">'+
+      [['all','All cards'],['owned','Only owned'],['available','Only unreserved / free']].map(item=>
+        '<option value="'+item[0]+'" '+(selected===item[0]?'selected':'')+'>'+item[1]+'</option>').join('')+
+      '</select></label><label class="deck-valid-filter"><input type="checkbox" id="deckValidColors" '+(state.deckValidOnly?'checked':'')+'> Compatible with Leader</label></div>';
+  }
+  // A pick list is a read-only allocation of deck requirements to physical records.
+  // No changes to shared inventory, box locations or reservations.
+  function buildDeckPickPlan(deck){
+    if(!deck)return {groups:[],missing:[],rows:[]};
+    const requests=[...(deck.leaderId?[{cardId:deck.leaderId,qty:1}]:[]),...deck.cards];
+    const groups=new Map(),missing=[];
+    for(const requirement of requests){
+      let remaining=requirement.qty;
+      const copies=state.data.entries.filter(e=>baseCardId(e.cardId)===baseCardId(requirement.cardId))
+        .sort((a,b)=>(locationById(a.locationId)?.name||'').localeCompare(locationById(b.locationId)?.name||'',undefined,{numeric:true})||a.slot.localeCompare(b.slot));
+      for(const entry of copies){
+        if(remaining<=0)break;
+        const count=Math.min(entry.qty,remaining);remaining-=count;
+        const key=entry.locationId;
+        if(!groups.has(key))groups.set(key,{id:key,name:locationById(key)?.name||'Unsorted',rows:[]});
+        groups.get(key).rows.push({
+          key:requirement.cardId+':'+entry.id,cardId:requirement.cardId,
+          name:baseCatalogCard(requirement.cardId)?.name||entry.name||requirement.cardId,
+          count,slot:entry.slot||''
+        });
+      }
+      if(remaining>0)missing.push({cardId:requirement.cardId,name:baseCatalogCard(requirement.cardId)?.name||requirement.cardId,count:remaining});
+    }
+    const sorted=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    return {groups:sorted,missing,rows:sorted.flatMap(g=>g.rows)};
+  }
+  function prepareDeckPanel(deck){
+    if(!state.deckPickOpen||!deck)return '';
+    const fingerprint=JSON.stringify({leader:deck.leaderId,cards:[...deck.cards].sort((a,b)=>a.cardId.localeCompare(b.cardId))});
+    if(state.deckPick.deckId!==deck.id||state.deckPick.fingerprint!==fingerprint)state.deckPick={deckId:deck.id,fingerprint,checked:new Set()};
+    const plan=buildDeckPickPlan(deck),picked=plan.rows.filter(r=>state.deckPick.checked.has(r.key)).length;
+    const percent=plan.rows.length?Math.round(100*picked/plan.rows.length):0;
+    const groups=plan.groups.map(g=>'<section class="pick-box"><h3>▣ '+escapeHtml(g.name)+' <small>'+g.rows.reduce((n,r)=>n+r.count,0)+' copies</small></h3>'+
+      g.rows.map(r=>'<label class="pick-row"><input type="checkbox" data-pick-key="'+escapeHtml(r.key)+'" '+(state.deckPick.checked.has(r.key)?'checked':'')+'>'+
+      '<span class="pick-row-name"><strong>'+escapeHtml(r.name)+'</strong><small>'+escapeHtml(r.cardId)+(r.slot?' · '+escapeHtml(r.slot):'')+'</small></span>'+
+      '<strong>'+r.count+'×</strong></label>').join('')+'</section>').join('');
+    const missing=plan.missing.length?'<div class="pick-missing"><strong>Missing physical cards</strong>'+
+      plan.missing.map(m=>'<p>'+m.count+'× '+escapeHtml(m.cardId)+' · '+escapeHtml(m.name)+'</p>').join('')+'</div>':'';
+    return '<section class="panel prepare-deck-panel" id="prepareDeckPanel"><div class="prepare-heading"><div><div class="overline">PHYSICAL PICK LIST</div><h2>Prepare '+escapeHtml(deck.name)+'</h2>'+
+      '<p class="hint">Take cards from each box and tick them off. This checklist does not move, reserve or delete inventory.</p></div>'+
+      '<div class="actions"><button class="button btn-outline small" type="button" data-action="deck-pick-reset">Reset checks</button>'+
+      '<button class="button btn-ghost small" type="button" data-action="deck-pick-close">Close</button></div></div>'+
+      '<div class="pick-progress"><strong id="pickProgressText">'+picked+'/'+plan.rows.length+' locations picked</strong>'+
+      '<div class="pick-progress-track"><div id="pickProgressFill" style="width:'+percent+'%"></div></div></div>'+
+      '<p class="hint">Virtual reservations in other decks may overlap. Check available copies before permanently assembling multiple decks.</p>'+
+      (groups||'<p class="hint">No owned cards for this deck yet.</p>')+missing+'</section>';
+  }
+  function updatePickProgress(){
+    const deck=selectedDeck();if(!deck||!state.deckPickOpen)return;
+    const rows=buildDeckPickPlan(deck).rows;
+    const picked=rows.filter(r=>state.deckPick.checked.has(r.key)).length;
+    const label=document.querySelector('#pickProgressText'),bar=document.querySelector('#pickProgressFill');
+    if(label)label.textContent=picked+'/'+rows.length+' locations picked';
+    if(bar)bar.style.width=(rows.length?Math.round(100*picked/rows.length):0)+'%';
+  }
+
   function decksView() {
     const d=selectedDeck();if(d)state.activeDeckId=d.id;
     const leader=d?baseCatalogCard(d.leaderId):null;
@@ -868,27 +956,36 @@
     const invalidColors=d?.leaderId?d.cards.filter(c=>{const card=baseCatalogCard(c.cardId);return card&&!validForLeader(card,d.leaderId);}).length:0;
     const sets=[...new Set(state.catalog.map(c=>setFrom(c.id)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
     const colors=['Red','Green','Blue','Purple','Black','Yellow'];
-    const deckPanel=d?`<section class="panel deck-workspace"><div class="deck-toolbar"><label class="deck-select-label">Current deck<select class="select" id="activeDeck">${state.data.decks.map(x=>`<option value="${escapeHtml(x.id)}" ${selectedOption(x.id,d.id)}>${escapeHtml(x.name)}</option>`).join('')}</select></label><div class="actions"><button class="button btn-outline small" data-action="rename-deck">Rename</button><button class="button btn-outline small" data-action="import-deck">↑ Import plan</button><button class="button btn-outline small" data-action="clone-deck">Duplicate</button><button class="button btn-outline small" data-action="export-deck">↓ OPTCGSim</button><button class="button btn-outline small" data-action="export-deck-json">↓ Plan JSON</button><button class="button btn-danger small" data-action="delete-deck">Delete</button></div></div>
-      <div class="deck-overview"><div class="deck-leader">${leader?`<img src="${escapeHtml(leader.image||imageUrl(leader.id))}" alt=""/>`:''}<div><small>LEADER</small><strong>${escapeHtml(leader?.name||'Choose a Leader below')}</strong><span>${escapeHtml(d.leaderId||'Not selected')}</span></div></div><div class="deck-stat"><strong>${sum}/50</strong><small>main deck cards</small></div><div class="deck-stat"><strong>${missing}</strong><small>missing copies</small></div></div>
+    const deckPanel=d?`<section class="panel deck-workspace"><div class="deck-toolbar"><label class="deck-select-label">Current deck<select class="select" id="activeDeck">${state.data.decks.map(x=>`<option value="${escapeHtml(x.id)}" ${selectedOption(x.id,d.id)}>${escapeHtml(x.name)}</option>`).join('')}</select></label><div class="actions"><button class="button btn-outline small" data-action="rename-deck">Rename</button><button class="button btn-outline small" data-action="import-deck">↑ Import plan</button><button class="button btn-outline small" data-action="clone-deck">Duplicate</button><button class="button btn-outline small" data-action="export-deck">↓ OPTCGSim</button><button class="button btn-outline small" data-action="export-deck-json">↓ Plan JSON</button><button class="button btn-outline small" data-action="deck-prepare">▣ Prepare deck</button><button class="button btn-danger small" data-action="delete-deck">Delete</button></div></div>
+      <div class="deck-overview"><div class="deck-leader">${leader?`<img class="preview-trigger" data-card-preview="${escapeHtml(leader.id)}" data-action="card-detail" data-id="${escapeHtml(leader.id)}" role="button" tabindex="0" src="${escapeHtml(leader.image||imageUrl(leader.id))}" alt=""/>`:''}<div><small>LEADER</small><strong>${escapeHtml(leader?.name||'Choose a Leader below')}</strong><span>${escapeHtml(d.leaderId||'Not selected')}</span></div></div><div class="deck-stat"><strong>${sum}/50</strong><small>main deck cards</small></div><div class="deck-stat"><strong>${missing}</strong><small>missing copies</small></div></div>
       ${sum===50&&leader&&!invalidColors?`<div class="deck-valid">✓ Deck has 50 cards and a Leader (check current restrictions before tournaments)</div>`:`<div class="deck-draft">Draft deck · ${leader?'':'Leader needed · '}${sum<50?`${50-sum} cards to fill`:sum>50?`${sum-50} cards over 50`:'50 cards'}${invalidColors?` · ${invalidColors} color-incompatible card types`:''} · Check official bans/restrictions separately</div>`}
       <label class="reservation-switch"><input type="checkbox" id="reserveDeck" ${d.reserved?'checked':''}><strong>Reserve physical copies for this deck</strong><small>Virtual plans do not reserve cards unless enabled. See conflicts below.</small></label>
       ${reservationWarnings(d)}
+      ${deckCostCurve(d)}
       <h3>Main deck <span class="muted">(${sum})</span></h3>${deckListHtml(d)}</section>`:empty('♠','Create your first deck','Decks are saved independently of your collection. Your inventory is never consumed when you add a card to a deck.',`<div class="actions"><button class="button btn-primary" data-action="new-deck">＋ Create deck</button><button class="button btn-outline" data-action="import-deck">↑ Import a plan</button></div>`);
     return pageHeading('DECK WORKSHOP','Deck builder','Build from your collection or the English card catalog. Your decks survive app updates and backups.',`<div class="actions"><button class="button btn-outline" type="button" data-action="import-deck">↑ Import plan</button><button class="button btn-primary" type="button" data-action="new-deck">＋ New deck</button></div>`)+
+      (d&&state.deckPickOpen?prepareDeckPanel(d):'')+
+      (d?'<div class="deck-studio-layout" data-mobile-tab="'+state.deckMobileTab+'"><div class="deck-studio-switch"><button class="button btn-outline small" data-action="deck-tab-pool">Browse cards</button><button class="button btn-outline small" data-action="deck-tab-deck">My deck</button></div>':'')+
       deckPanel+(d?`<section class="panel deck-card-pool"><div class="section-heading"><h2>Find cards for this deck</h2><span class="hint">Leader: click Set leader · Other cards: click + Add</span></div>
-      <div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search by card name / ID" value="${escapeHtml(state.query)}"></label><select id="catalogSet" class="select">${selectOptions(sets,state.set,'All sets')}</select><select id="catalogColor" class="select">${selectOptions(colors,state.color,'All colors')}</select></div>
-      ${advancedFilters()}<div class="catalog-info"><span id="deckPoolCount"></span><span>Cards sharing a number count toward the same four-copy limit.</span></div><div class="deck-pool-grid" id="deckPool"></div><div id="deckPoolMore" class="text-center" style="padding:20px"></div></section>`:'');
+      <div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search by card name / ID" value="${escapeHtml(state.query)}"></label><select id="catalogSet" class="select">${selectOptions(sets,state.set,'All sets')}</select></div>${colorFilterHtml()}${deckAvailabilityHtml()}
+      ${advancedFilters()}<div class="catalog-info"><span id="deckPoolCount"></span><span>Cards sharing a number count toward the same four-copy limit.</span></div><div class="deck-pool-grid" id="deckPool"></div><div id="deckPoolMore" class="text-center" style="padding:20px"></div></section>`:'')+(d?'</div>':'');
   }
   function paintDeckPool() {
     if(state.view!=='decks')return;
     const d=selectedDeck();if(!d)return;
-    const base=new Map();for(const c of filteredCatalog()){const id=baseCardId(c.id);if(!base.has(id)||c.id===id)base.set(id,c);}
+    const base=new Map();for(const c of filteredCatalog()){
+      const id=baseCardId(c.id);
+      if(state.deckAvailability==='owned'&&ownedBaseQty(id)===0)continue;
+      if(state.deckAvailability==='available'&&freeQty(id)===0)continue;
+      if(state.deckValidOnly&&d.leaderId&&c.category!=='Leader'&&!validForLeader(c,d.leaderId))continue;
+      if(!base.has(id)||c.id===id)base.set(id,c);
+    }
     const cards=[...base.values()];const list=cards.slice(0,state.perPage);
     document.querySelector('#deckPoolCount').textContent=`${fmt(cards.length)} unique card numbers found`;
     document.querySelector('#deckPool').innerHTML=list.length?list.map(c=>{
       const leader=c.category.toLowerCase()==='leader';const qty=d.cards.find(x=>x.cardId===baseCardId(c.id))?.qty||0;
       const allowed=leader?true:validForLeader(c,d.leaderId);
-      return `<div class="deck-pool-card"><img loading="lazy" src="${escapeHtml(c.image||imageUrl(c.id))}" alt=""/><div><strong>${escapeHtml(c.name)}</strong><small>${escapeHtml(baseCardId(c.id))} · ${escapeHtml(c.colors)} · ${leader?'Leader':`Cost ${c.cost??'—'}`}<br/>${escapeHtml(c.types.join(' · '))}</small><div class="deck-pool-tools">${leader?`<button class="button btn-outline tiny" data-action="deck-set-leader" data-id="${escapeHtml(baseCardId(c.id))}">${d.leaderId===baseCardId(c.id)?'✓ Leader':'Set leader'}</button>`:`<button class="button btn-primary tiny" data-action="deck-add" data-id="${escapeHtml(baseCardId(c.id))}" ${qty>=4?'disabled':''}>＋ Add (${qty}/4)</button>`}<span title="${escapeHtml(reservedSummary(c.id))}">${ownedBaseQty(c.id)} owned · ${freeQty(c.id)} free${!allowed?' · ⚠ Color warning':''}</span></div></div></div>`;
+      return `<div class="deck-pool-card"><img class="preview-trigger" data-card-preview="${escapeHtml(baseCardId(c.id))}" data-action="card-detail" data-id="${escapeHtml(baseCardId(c.id))}" role="button" tabindex="0" loading="lazy" src="${escapeHtml(c.image||imageUrl(c.id))}" alt=""/><div><strong>${escapeHtml(c.name)}</strong><small>${escapeHtml(baseCardId(c.id))} · ${escapeHtml(c.colors)} · ${leader?'Leader':`Cost ${c.cost??'—'}`}<br/>${escapeHtml(c.types.join(' · '))}</small><div class="deck-pool-tools">${leader?`<button class="button btn-outline tiny" data-action="deck-set-leader" data-id="${escapeHtml(baseCardId(c.id))}">${d.leaderId===baseCardId(c.id)?'✓ Leader':'Set leader'}</button>`:`<button class="button btn-primary tiny" data-action="deck-add" data-id="${escapeHtml(baseCardId(c.id))}" ${qty>=4?'disabled':''}>＋ Add (${qty}/4)</button>`}<span title="${escapeHtml(reservedSummary(c.id))}">${ownedBaseQty(c.id)} owned · ${freeQty(c.id)} free${!allowed?' · ⚠ Color warning':''}</span></div></div></div>`;
     }).join(''):empty('⌕','No matching cards','Try adjusting your card filters.');
     document.querySelector('#deckPoolMore').innerHTML=cards.length>list.length?`<button class="button btn-outline" data-action="more-cards">Show more (${cards.length-list.length} remaining)</button>`:'';
   }
@@ -1044,8 +1141,76 @@
     `<div class="location-cards">${state.data.locations.map(l=>`<article class="location-card"><div class="storage-icon">${types[l.kind]||types.Other}</div><h3>${escapeHtml(l.name)}</h3><div class="location-caption">${escapeHtml(l.note||'No description yet.')}</div><div class="location-count">${fmt(entryCounts(l.id))} <span class="muted" style="font:12px system-ui">copies</span></div><div class="actions"><button class="button btn-outline tiny" data-action="filter-location" data-id="${escapeHtml(l.id)}">View cards</button><button class="button btn-ghost tiny" data-action="edit-location" data-id="${escapeHtml(l.id)}">Edit</button>${l.id!==DEFAULT_LOCATION_ID?`<button class="button btn-danger tiny" data-action="remove-location" data-id="${escapeHtml(l.id)}">Delete</button>`:''}</div></article>`).join('')}</div><p class="help-note">Tip: Box numbers are automatically assigned when you press Next numbered box. Previous binder/slot information is preserved during upgrades.</p>`;
   }
 
-  function modal(body) { modalLayer.innerHTML=`<div class="modal-overlay" id="modalOverlay"><section class="modal" role="dialog" aria-modal="true" aria-label="Collection dialog"><button type="button" class="modal-close" data-action="close-modal" aria-label="Close dialog">×</button>${body}</section></div>`; const focus=modalLayer.querySelector('input:not([type=hidden]),textarea,select'); if (focus) focus.focus(); }
+  function modal(body,wide=false) { hideCardHover(); modalLayer.innerHTML=`<div class="modal-overlay" id="modalOverlay"><section class="modal ${wide?'modal-wide':''}" role="dialog" aria-modal="true" aria-label="Collection dialog"><button type="button" class="modal-close" data-action="close-modal" aria-label="Close dialog">×</button>${body}</section></div>`; const focus=modalLayer.querySelector('input:not([type=hidden]),textarea,select'); if (focus) focus.focus(); }
   const closeModal=()=>{modalLayer.innerHTML='';};
+
+  // Read-only card detail shared by catalog, inventory and deck builder.
+  function openCardDetail(cardId){
+    const id=baseCardId(safeId(cardId)),card=baseCatalogCard(id);
+    const rows=state.data.entries.filter(e=>baseCardId(e.cardId)===id);
+    const owned=rows.reduce((sum,e)=>sum+e.qty,0),reserved=reservedTotal(id);
+    const deck=selectedDeck(),included=deck?.cards.find(e=>e.cardId===id)?.qty||0;
+    const name=card?.name||rows[0]?.name||id, art=card?.image||imageUrl(id);
+    const props=card?[
+      ['Type',card.category],['Colors',card.colors],['Cost',card.cost??'—'],
+      ['Power',card.power??'—'],['Counter',card.counter??'—'],
+      ['Attribute',card.attributes.join(' / ')],['Crew / traits',card.types.join(' / ')]
+    ]:[];
+    const meta=props.map(pair=>'<div><dt>'+escapeHtml(pair[0])+'</dt><dd>'+escapeHtml(pair[1]||'—')+'</dd></div>').join('');
+    const locations=rows.length?rows.map(row=>
+      '<div><strong>'+escapeHtml(locationById(row.locationId)?.name||'Unsorted')+'</strong>'+
+      (row.slot?'<small>'+escapeHtml(row.slot)+'</small>':'')+
+      '<span>'+fmt(row.qty)+'×</span></div>').join(''):'<p class="hint">Not in your physical inventory.</p>';
+    const deckAction=deck?'<button class="button btn-primary small" type="button" data-action="detail-add-deck" data-id="'+escapeHtml(id)+'"'+
+      (card?.category!=='Leader'&&included>=4?' disabled':'')+'>'+
+      (card?.category==='Leader'?'Set as Leader':'＋ Add to deck ('+included+'/4)')+'</button>':'';
+    modal('<div class="card-detail"><div class="card-detail-art"><img loading="lazy" src="'+escapeHtml(art)+'" alt="Artwork for '+escapeHtml(name)+'"></div>'+
+      '<div class="card-detail-info"><div class="overline">CARD DETAILS · '+escapeHtml(id)+'</div><h2>'+escapeHtml(name)+'</h2>'+
+      '<div class="card-detail-totals"><span><strong>'+fmt(owned)+'×</strong> owned</span><span><strong>'+fmt(reserved)+'×</strong> reserved</span><span><strong>'+fmt(Math.max(0,owned-reserved))+'×</strong> free</span></div>'+
+      (meta?'<dl class="card-detail-metadata">'+meta+'</dl>':'')+
+      (card?.effect?'<div class="card-detail-effect"><strong>Effect</strong><p>'+escapeHtml(card.effect)+'</p></div>':'')+
+      (card?.trigger?'<div class="card-detail-effect"><strong>Trigger</strong><p>'+escapeHtml(card.trigger)+'</p></div>':'')+
+      '<h3>Physical storage</h3><div class="card-detail-locations">'+locations+'</div>'+
+      '<div class="card-detail-actions">'+deckAction+
+      '<button type="button" class="button btn-outline small" data-action="detail-add-copy" data-id="'+escapeHtml(id)+'">＋ Add copies</button>'+
+      '<button type="button" class="button btn-outline small" data-action="detail-show-inventory" data-id="'+escapeHtml(id)+'">View / move copies</button></div></div></div>',true);
+  }
+  let hoverCardEl=null;
+  function hideCardHover(){if(hoverCardEl)hoverCardEl.hidden=true;}
+  function positionCardHover(x,y){
+    if(!hoverCardEl)return;
+    hoverCardEl.style.left=Math.max(8,Math.min(window.innerWidth-290,x+18))+'px';
+    hoverCardEl.style.top=Math.max(8,Math.min(window.innerHeight-440,y+16))+'px';
+  }
+  function showCardHover(id,x,y){
+    if(!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches||modalLayer.childElementCount)return;
+    const c=baseCatalogCard(id),img=c?.image||imageUrl(id);
+    if(!hoverCardEl){hoverCardEl=document.createElement('div');hoverCardEl.className='card-hover-preview';hoverCardEl.setAttribute('aria-hidden','true');document.body.appendChild(hoverCardEl);}
+    if(hoverCardEl.dataset.card!==id){
+      hoverCardEl.innerHTML='<img src="'+escapeHtml(img)+'" alt=""><div><strong>'+escapeHtml(c?.name||id)+'</strong><small>'+escapeHtml(id)+' · Click for details</small></div>';
+      hoverCardEl.dataset.card=id;
+    }
+    hoverCardEl.hidden=false;positionCardHover(x,y);
+  }
+  document.addEventListener('pointerover',e=>{
+    if(e.pointerType!=='mouse')return;
+    const target=e.target.closest?.('[data-card-preview]');
+    if(target)showCardHover(target.dataset.cardPreview,e.clientX,e.clientY);
+  });
+  document.addEventListener('pointermove',e=>{
+    if(e.pointerType==='mouse'&&hoverCardEl&&!hoverCardEl.hidden)positionCardHover(e.clientX,e.clientY);
+  });
+  document.addEventListener('pointerout',e=>{
+    const target=e.target.closest?.('[data-card-preview]');
+    if(target&&!target.contains(e.relatedTarget))hideCardHover();
+  });
+  document.addEventListener('scroll',hideCardHover,true);
+  document.addEventListener('keydown',e=>{
+    if((e.key==='Enter'||e.key===' ')&&e.target.matches?.('[data-card-preview]')){
+      e.preventDefault();openCardDetail(e.target.dataset.cardPreview);
+    }
+  });
+
   function openAdd(card) {
     const existing = card || {};
     modal(`<h2>Add to collection</h2><p class="subhead">Save copies of a card and the precise place you keep them.</p><form data-form="add-entry"><div class="form-fields"><label>Card ID<input class="field" name="cardId" maxlength="40" required placeholder="OP05-002" value="${escapeHtml(existing.id||'')}" /></label><label>Card name<input class="field" name="name" maxlength="150" required placeholder="Character name" value="${escapeHtml(existing.name||'')}" /></label><div class="quick-stats">${badgeColor(existing.rarity||'Manual entry')} ${escapeHtml(existing.colors||'')}</div><label>Number of copies<input class="field" name="qty" type="number" min="1" max="${MAX_QTY}" value="1" required /></label><label>Storage location<select class="select" name="locationId">${locationOptions('unsorted')}</select></label><label>Exact position (optional)<input class="field" name="slot" maxlength="100" placeholder="Page 2 / Pocket 7 or Row B" /></label><label>Notes (optional)<textarea name="note" maxlength="1000" placeholder="Condition, language, sleeves, etc."></textarea></label><input name="rarity" type="hidden" value="${escapeHtml(existing.rarity||'')}" /><input name="colors" type="hidden" value="${escapeHtml(existing.colors||'')}" /></div><div class="modal-actions"><button class="button btn-ghost" type="button" data-action="close-modal">Cancel</button><button class="button btn-primary" type="submit">Save cards</button></div></form>`);
@@ -1175,8 +1340,8 @@
   }
   function openInventoryCsv(){modal(`<h2>Import inventory from another app</h2><p class="subhead">Upload a CSV containing your existing English cards. This adds physical copies; it does not create a deck.</p><form data-form="import-inventory-csv"><div class="form-fields"><label>CSV file<input type="file" class="file-input" id="externalCsvFile" accept=".csv,text/csv,text/plain" required></label><label>Default numbered box<select class="select" name="locationId">${locationOptions('box-1')}</select></label></div><p class="hint">Recognized headers: card_id / card number / id, qty / quantity / count, box / location, name. CSV can use comma or semicolon. A numeric box value such as 3 creates or uses Box 3. Export a backup before large imports.</p><button class="button btn-primary" type="submit">Import physical cards</button></form>`);}
   async function importExternalCsv(form){const f=new FormData(form),file=document.querySelector('#externalCsvFile')?.files?.[0];if(!file)throw new Error('Choose a CSV file.');const total=importInventoryCsv(await file.text(),String(f.get('locationId')));closeModal();setView('inventory');toast(`Imported ${fmt(total)} physical cards.`);}
-  function snapshotFilters(){return {query:state.query,color:state.color,set:state.set,filters:{...state.filters,costs:[...state.filters.costs]}};}
-  function applySavedPreset(p){state.query=p.query;state.color=p.color;state.set=p.set;state.filters={...p.filters,costs:new Set(p.filters.costs)};state.perPage=48;render();}
+  function snapshotFilters(){return {query:state.query,color:'all',colors:[...state.colors],set:state.set,filters:{...state.filters,costs:[...state.filters.costs]}};}
+  function applySavedPreset(p){state.query=p.query||'';state.colors=new Set(Array.isArray(p.colors)&&p.colors.length?p.colors:(p.color&&p.color!=='all'?[p.color]:[]));state.color='all';state.set=p.set||'all';state.filters={...p.filters,costs:new Set(p.filters.costs||[])};state.perPage=48;render();}
   function cloudView(){const configured=Boolean(sync.config);const signedIn=Boolean(sync.user);
     const accountPanel=signedIn?`
       <p class="hint"><strong>Signed in as ${escapeHtml(sync.user.email||'your account')}</strong>. Your password and membership are unchanged from v1.1.5.</p>
@@ -1311,7 +1476,7 @@
     const nav=e.target.closest('[data-view]');if(nav){setView(nav.dataset.view);return;}
     const btn=e.target.closest('[data-action]');if(!btn)return;
     const action=btn.dataset.action, id=btn.dataset.id;
-    const writes=['bulk-catalog-add','bulk-catalog-move','bulk-catalog-delete','bulk-inventory-move','bulk-inventory-delete','add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
+    const writes=['detail-add-deck','detail-add-copy','bulk-catalog-add','bulk-catalog-move','bulk-catalog-delete','bulk-inventory-move','bulk-inventory-delete','add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
     if(writes.includes(action)&&!requireCloudEdit())return;
     if(action==='bulk-select-visible-inventory'){
       const rows=inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS);
@@ -1343,11 +1508,23 @@
     if(action==='cloud-refresh'||action==='cloud-diagnose'){establishCloud({fromButton:true});return;}
     if(action==='cloud-signout'){sync.client?.auth.signOut({scope:'local'}).catch(err=>toast('Sign-out failed: '+err.message,true));return;}
     if(action==='clear-filters'){
-      state.query='';state.set='all';state.color='all';state.perPage=48;
+      state.query='';state.set='all';state.color='all';state.colors.clear();state.perPage=48;
       state.filters={effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false};render();return;
     }
     if(action==='clear-costs'){state.filters.costs.clear();render();return;}
+    if(action==='clear-colors'){state.colors.clear();render();return;}
     if(action==='effect-preset'){state.filters.effect=String(btn.dataset.value||'');state.filters.effectMode='all';render();return;}
+    if(action==='deck-tab-pool'||action==='deck-tab-deck'){
+      state.deckMobileTab=action==='deck-tab-pool'?'pool':'deck';render();return;
+    }
+    if(action==='deck-prepare'){
+      const d=selectedDeck();if(!d)return;
+      state.deckPickOpen=true;
+      if(state.deckPick.deckId!==d.id)state.deckPick={deckId:d.id,fingerprint:'',checked:new Set()};
+      render();return;
+    }
+    if(action==='deck-pick-close'){state.deckPickOpen=false;render();return;}
+    if(action==='deck-pick-reset'){state.deckPick.checked.clear();render();return;}
     if(action==='new-deck'){modal(`<h2>Create a deck</h2><p class="subhead">Your deck is saved independently from your physical collection.</p><form data-form="new-deck"><div class="form-fields"><label>Deck name<input class="field" name="name" maxlength="100" required placeholder="e.g. Belo Betty Aggro"></label></div><div class="modal-actions"><button class="button btn-ghost" data-action="close-modal" type="button">Cancel</button><button class="button btn-primary" type="submit">Create deck</button></div></form>`);return;}
     if(action==='rename-deck'){const d=selectedDeck();if(d)modal(`<h2>Rename deck</h2><form data-form="rename-deck"><div class="form-fields"><label>Deck name<input class="field" name="name" maxlength="100" required value="${escapeHtml(d.name)}"></label></div><div class="modal-actions"><button class="button btn-primary" type="submit">Save name</button></div></form>`);return;}
     if(action==='delete-deck'){const d=selectedDeck();if(d&&confirm(`Delete deck “${d.name}”? Your physical collection will not be affected.`)){state.data.decks=state.data.decks.filter(x=>x.id!==d.id);state.activeDeckId=state.data.decks[0]?.id||'';persist();render();toast('Deck deleted; physical cards unchanged.');}return;}
@@ -1366,6 +1543,22 @@
     if(action==='open-custom'){openAdd();return;}
     if(action==='open-bulk'){openBulk();return;}
     if(action==='open-import'){toast('Full backup replacement is disabled. Use CSV import or the migration instructions.',true);return;}
+
+    if(action==='card-detail'){openCardDetail(id);return;}
+    if(action==='detail-add-copy'){openAdd(baseCatalogCard(id)||catalogCard(id));return;}
+    if(action==='detail-show-inventory'){
+      hideCardHover();closeModal();state.inventoryQuery=id;state.inventoryLocation='all';setView('inventory');return;
+    }
+    if(action==='detail-add-deck'){
+      const card=baseCatalogCard(id),deck=selectedDeck();
+      if(!deck){toast('Create a deck first.',true);return;}
+      if(card?.category==='Leader'){
+        const conflicts=deck.cards.filter(x=>{const c=baseCatalogCard(x.cardId);return c&&!validForLeader(c,id);});
+        if(conflicts.length&&!confirm('New Leader has '+conflicts.length+' incompatible card types. Keep this draft?'))return;
+        deck.leaderId=id;deck.updatedAt=dateNow();closeModal();persist();render();toast('Leader updated.');return;
+      }
+      closeModal();addDeckCard(id,1);return;
+    }
     if(action==='add-card'){openAdd(catalogCard(id));return;}
     if(action==='more-cards'){state.perPage+=48;paintFilterResults();return;}
     if(action==='add-location'){openLocation();return;}
@@ -1570,10 +1763,21 @@
       render();return;
     }
     if(e.target.id==='catalogSet'){state.set=e.target.value;state.perPage=48;paintFilterResults();}
-    if(e.target.id==='catalogColor'){state.color=e.target.value;state.perPage=48;paintFilterResults();}
+    if(e.target.dataset.filterColor!==undefined){const c=e.target.dataset.filterColor;if(COLOR_OPTIONS.includes(c)){if(e.target.checked)state.colors.add(c);else state.colors.delete(c);state.perPage=48;paintFilterResults();}return;}
     if(e.target.dataset.filterCost!==undefined){const n=Number(e.target.dataset.filterCost);if(e.target.checked)state.filters.costs.add(n);else state.filters.costs.delete(n);state.perPage=48;paintFilterResults();}
     const map={catalogCategory:'category',catalogRarity:'rarity',catalogAttribute:'attribute',catalogCounter:'counter',catalogSort:'sort',catalogEffectMode:'effectMode',catalogEffectTarget:'effectTarget',catalogTraitMode:'traitMode',catalogOwned:'ownedOnly',catalogNoVariants:'hideVariants'};
     if(e.target.id in map){state.filters[map[e.target.id]]=e.target.type==='checkbox'?e.target.checked:e.target.value;state.perPage=48;paintFilterResults();}
+    if(e.target.id==='deckAvailability'){
+      state.deckAvailability=e.target.value;state.perPage=48;paintDeckPool();return;
+    }
+    if(e.target.id==='deckValidColors'){
+      state.deckValidOnly=e.target.checked;state.perPage=48;paintDeckPool();return;
+    }
+    if(e.target.dataset.pickKey!==undefined){
+      if(e.target.checked)state.deckPick.checked.add(e.target.dataset.pickKey);
+      else state.deckPick.checked.delete(e.target.dataset.pickKey);
+      updatePickProgress();return;
+    }
     if(e.target.id==='activeDeck'){state.activeDeckId=e.target.value;render();}
     if(e.target.id==='reserveDeck'&&!requireCloudEdit()){e.target.checked=!e.target.checked;return;}
     if(e.target.id==='reserveDeck'){const d=selectedDeck();if(d){d.reserved=e.target.checked;d.updatedAt=dateNow();persist();render();}}

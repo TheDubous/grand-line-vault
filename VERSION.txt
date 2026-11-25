@@ -1,1 +1,1 @@
-Grand Line Vault 1.2.6 — wider NAME area, automatic/manual Capture switch, stronger one-frame OCR, bulk card actions.
+Grand Line Vault 1.3.0 — card zoom/details, multi-color filters, deck studio, cost curve, Prepare deck.
