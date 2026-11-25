@@ -921,7 +921,8 @@
   }
   function prepareDeckPanel(deck){
     if(!state.deckPickOpen||!deck)return '';
-    if(state.deckPick.deckId!==deck.id)state.deckPick={deckId:deck.id,checked:new Set()};
+    const fingerprint=JSON.stringify({leader:deck.leaderId,cards:[...deck.cards].sort((a,b)=>a.cardId.localeCompare(b.cardId))});
+    if(state.deckPick.deckId!==deck.id||state.deckPick.fingerprint!==fingerprint)state.deckPick={deckId:deck.id,fingerprint,checked:new Set()};
     const plan=buildDeckPickPlan(deck),picked=plan.rows.filter(r=>state.deckPick.checked.has(r.key)).length;
     const percent=plan.rows.length?Math.round(100*picked/plan.rows.length):0;
     const groups=plan.groups.map(g=>'<section class="pick-box"><h3>▣ '+escapeHtml(g.name)+' <small>'+g.rows.reduce((n,r)=>n+r.count,0)+' copies</small></h3>'+
@@ -1519,7 +1520,7 @@
     if(action==='deck-prepare'){
       const d=selectedDeck();if(!d)return;
       state.deckPickOpen=true;
-      if(state.deckPick.deckId!==d.id)state.deckPick={deckId:d.id,checked:new Set()};
+      if(state.deckPick.deckId!==d.id)state.deckPick={deckId:d.id,fingerprint:'',checked:new Set()};
       render();return;
     }
     if(action==='deck-pick-close'){state.deckPickOpen=false;render();return;}
