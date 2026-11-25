@@ -963,9 +963,11 @@
       ${deckCostCurve(d)}
       <h3>Main deck <span class="muted">(${sum})</span></h3>${deckListHtml(d)}</section>`:empty('♠','Create your first deck','Decks are saved independently of your collection. Your inventory is never consumed when you add a card to a deck.',`<div class="actions"><button class="button btn-primary" data-action="new-deck">＋ Create deck</button><button class="button btn-outline" data-action="import-deck">↑ Import a plan</button></div>`);
     return pageHeading('DECK WORKSHOP','Deck builder','Build from your collection or the English card catalog. Your decks survive app updates and backups.',`<div class="actions"><button class="button btn-outline" type="button" data-action="import-deck">↑ Import plan</button><button class="button btn-primary" type="button" data-action="new-deck">＋ New deck</button></div>`)+
+      (d&&state.deckPickOpen?prepareDeckPanel(d):'')+
+      (d?'<div class="deck-studio-layout" data-mobile-tab="'+state.deckMobileTab+'"><div class="deck-studio-switch"><button class="button btn-outline small" data-action="deck-tab-pool">Browse cards</button><button class="button btn-outline small" data-action="deck-tab-deck">My deck</button></div>':'')+
       deckPanel+(d?`<section class="panel deck-card-pool"><div class="section-heading"><h2>Find cards for this deck</h2><span class="hint">Leader: click Set leader · Other cards: click + Add</span></div>
       <div class="toolbar"><label class="search-box"><span>⌕</span><input id="catalogSearch" type="search" placeholder="Search by card name / ID" value="${escapeHtml(state.query)}"></label><select id="catalogSet" class="select">${selectOptions(sets,state.set,'All sets')}</select></div>${colorFilterHtml()}${deckAvailabilityHtml()}
-      ${advancedFilters()}<div class="catalog-info"><span id="deckPoolCount"></span><span>Cards sharing a number count toward the same four-copy limit.</span></div><div class="deck-pool-grid" id="deckPool"></div><div id="deckPoolMore" class="text-center" style="padding:20px"></div></section>`:'');
+      ${advancedFilters()}<div class="catalog-info"><span id="deckPoolCount"></span><span>Cards sharing a number count toward the same four-copy limit.</span></div><div class="deck-pool-grid" id="deckPool"></div><div id="deckPoolMore" class="text-center" style="padding:20px"></div></section>`:'')+(d?'</div>':'');
   }
   function paintDeckPool() {
     if(state.view!=='decks')return;
