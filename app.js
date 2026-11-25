@@ -972,7 +972,13 @@
   function paintDeckPool() {
     if(state.view!=='decks')return;
     const d=selectedDeck();if(!d)return;
-    const base=new Map();for(const c of filteredCatalog()){const id=baseCardId(c.id);if(!base.has(id)||c.id===id)base.set(id,c);}
+    const base=new Map();for(const c of filteredCatalog()){
+      const id=baseCardId(c.id);
+      if(state.deckAvailability==='owned'&&ownedBaseQty(id)===0)continue;
+      if(state.deckAvailability==='available'&&freeQty(id)===0)continue;
+      if(state.deckValidOnly&&d.leaderId&&c.category!=='Leader'&&!validForLeader(c,d.leaderId))continue;
+      if(!base.has(id)||c.id===id)base.set(id,c);
+    }
     const cards=[...base.values()];const list=cards.slice(0,state.perPage);
     document.querySelector('#deckPoolCount').textContent=`${fmt(cards.length)} unique card numbers found`;
     document.querySelector('#deckPool').innerHTML=list.length?list.map(c=>{
@@ -1507,6 +1513,17 @@
     if(action==='clear-costs'){state.filters.costs.clear();render();return;}
     if(action==='clear-colors'){state.colors.clear();render();return;}
     if(action==='effect-preset'){state.filters.effect=String(btn.dataset.value||'');state.filters.effectMode='all';render();return;}
+    if(action==='deck-tab-pool'||action==='deck-tab-deck'){
+      state.deckMobileTab=action==='deck-tab-pool'?'pool':'deck';render();return;
+    }
+    if(action==='deck-prepare'){
+      const d=selectedDeck();if(!d)return;
+      state.deckPickOpen=true;
+      if(state.deckPick.deckId!==d.id)state.deckPick={deckId:d.id,checked:new Set()};
+      render();return;
+    }
+    if(action==='deck-pick-close'){state.deckPickOpen=false;render();return;}
+    if(action==='deck-pick-reset'){state.deckPick.checked.clear();render();return;}
     if(action==='new-deck'){modal(`<h2>Create a deck</h2><p class="subhead">Your deck is saved independently from your physical collection.</p><form data-form="new-deck"><div class="form-fields"><label>Deck name<input class="field" name="name" maxlength="100" required placeholder="e.g. Belo Betty Aggro"></label></div><div class="modal-actions"><button class="button btn-ghost" data-action="close-modal" type="button">Cancel</button><button class="button btn-primary" type="submit">Create deck</button></div></form>`);return;}
     if(action==='rename-deck'){const d=selectedDeck();if(d)modal(`<h2>Rename deck</h2><form data-form="rename-deck"><div class="form-fields"><label>Deck name<input class="field" name="name" maxlength="100" required value="${escapeHtml(d.name)}"></label></div><div class="modal-actions"><button class="button btn-primary" type="submit">Save name</button></div></form>`);return;}
     if(action==='delete-deck'){const d=selectedDeck();if(d&&confirm(`Delete deck “${d.name}”? Your physical collection will not be affected.`)){state.data.decks=state.data.decks.filter(x=>x.id!==d.id);state.activeDeckId=state.data.decks[0]?.id||'';persist();render();toast('Deck deleted; physical cards unchanged.');}return;}
@@ -1749,6 +1766,17 @@
     if(e.target.dataset.filterCost!==undefined){const n=Number(e.target.dataset.filterCost);if(e.target.checked)state.filters.costs.add(n);else state.filters.costs.delete(n);state.perPage=48;paintFilterResults();}
     const map={catalogCategory:'category',catalogRarity:'rarity',catalogAttribute:'attribute',catalogCounter:'counter',catalogSort:'sort',catalogEffectMode:'effectMode',catalogEffectTarget:'effectTarget',catalogTraitMode:'traitMode',catalogOwned:'ownedOnly',catalogNoVariants:'hideVariants'};
     if(e.target.id in map){state.filters[map[e.target.id]]=e.target.type==='checkbox'?e.target.checked:e.target.value;state.perPage=48;paintFilterResults();}
+    if(e.target.id==='deckAvailability'){
+      state.deckAvailability=e.target.value;state.perPage=48;paintDeckPool();return;
+    }
+    if(e.target.id==='deckValidColors'){
+      state.deckValidOnly=e.target.checked;state.perPage=48;paintDeckPool();return;
+    }
+    if(e.target.dataset.pickKey!==undefined){
+      if(e.target.checked)state.deckPick.checked.add(e.target.dataset.pickKey);
+      else state.deckPick.checked.delete(e.target.dataset.pickKey);
+      updatePickProgress();return;
+    }
     if(e.target.id==='activeDeck'){state.activeDeckId=e.target.value;render();}
     if(e.target.id==='reserveDeck'&&!requireCloudEdit()){e.target.checked=!e.target.checked;return;}
     if(e.target.id==='reserveDeck'){const d=selectedDeck();if(d){d.reserved=e.target.checked;d.updatedAt=dateNow();persist();render();}}
