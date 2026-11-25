@@ -1183,8 +1183,8 @@
   }
   function openInventoryCsv(){modal(`<h2>Import inventory from another app</h2><p class="subhead">Upload a CSV containing your existing English cards. This adds physical copies; it does not create a deck.</p><form data-form="import-inventory-csv"><div class="form-fields"><label>CSV file<input type="file" class="file-input" id="externalCsvFile" accept=".csv,text/csv,text/plain" required></label><label>Default numbered box<select class="select" name="locationId">${locationOptions('box-1')}</select></label></div><p class="hint">Recognized headers: card_id / card number / id, qty / quantity / count, box / location, name. CSV can use comma or semicolon. A numeric box value such as 3 creates or uses Box 3. Export a backup before large imports.</p><button class="button btn-primary" type="submit">Import physical cards</button></form>`);}
   async function importExternalCsv(form){const f=new FormData(form),file=document.querySelector('#externalCsvFile')?.files?.[0];if(!file)throw new Error('Choose a CSV file.');const total=importInventoryCsv(await file.text(),String(f.get('locationId')));closeModal();setView('inventory');toast(`Imported ${fmt(total)} physical cards.`);}
-  function snapshotFilters(){return {query:state.query,color:state.color,set:state.set,filters:{...state.filters,costs:[...state.filters.costs]}};}
-  function applySavedPreset(p){state.query=p.query;state.color=p.color;state.set=p.set;state.filters={...p.filters,costs:new Set(p.filters.costs)};state.perPage=48;render();}
+  function snapshotFilters(){return {query:state.query,color:'all',colors:[...state.colors],set:state.set,filters:{...state.filters,costs:[...state.filters.costs]}};}
+  function applySavedPreset(p){state.query=p.query||'';state.colors=new Set(Array.isArray(p.colors)&&p.colors.length?p.colors:(p.color&&p.color!=='all'?[p.color]:[]));state.color='all';state.set=p.set||'all';state.filters={...p.filters,costs:new Set(p.filters.costs||[])};state.perPage=48;render();}
   function cloudView(){const configured=Boolean(sync.config);const signedIn=Boolean(sync.user);
     const accountPanel=signedIn?`
       <p class="hint"><strong>Signed in as ${escapeHtml(sync.user.email||'your account')}</strong>. Your password and membership are unchanged from v1.1.5.</p>
@@ -1351,10 +1351,11 @@
     if(action==='cloud-refresh'||action==='cloud-diagnose'){establishCloud({fromButton:true});return;}
     if(action==='cloud-signout'){sync.client?.auth.signOut({scope:'local'}).catch(err=>toast('Sign-out failed: '+err.message,true));return;}
     if(action==='clear-filters'){
-      state.query='';state.set='all';state.color='all';state.perPage=48;
+      state.query='';state.set='all';state.color='all';state.colors.clear();state.perPage=48;
       state.filters={effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false};render();return;
     }
     if(action==='clear-costs'){state.filters.costs.clear();render();return;}
+    if(action==='clear-colors'){state.colors.clear();render();return;}
     if(action==='effect-preset'){state.filters.effect=String(btn.dataset.value||'');state.filters.effectMode='all';render();return;}
     if(action==='new-deck'){modal(`<h2>Create a deck</h2><p class="subhead">Your deck is saved independently from your physical collection.</p><form data-form="new-deck"><div class="form-fields"><label>Deck name<input class="field" name="name" maxlength="100" required placeholder="e.g. Belo Betty Aggro"></label></div><div class="modal-actions"><button class="button btn-ghost" data-action="close-modal" type="button">Cancel</button><button class="button btn-primary" type="submit">Create deck</button></div></form>`);return;}
     if(action==='rename-deck'){const d=selectedDeck();if(d)modal(`<h2>Rename deck</h2><form data-form="rename-deck"><div class="form-fields"><label>Deck name<input class="field" name="name" maxlength="100" required value="${escapeHtml(d.name)}"></label></div><div class="modal-actions"><button class="button btn-primary" type="submit">Save name</button></div></form>`);return;}
@@ -1578,7 +1579,7 @@
       render();return;
     }
     if(e.target.id==='catalogSet'){state.set=e.target.value;state.perPage=48;paintFilterResults();}
-    if(e.target.id==='catalogColor'){state.color=e.target.value;state.perPage=48;paintFilterResults();}
+    if(e.target.dataset.filterColor!==undefined){const c=e.target.dataset.filterColor;if(COLOR_OPTIONS.includes(c)){if(e.target.checked)state.colors.add(c);else state.colors.delete(c);state.perPage=48;paintFilterResults();}return;}
     if(e.target.dataset.filterCost!==undefined){const n=Number(e.target.dataset.filterCost);if(e.target.checked)state.filters.costs.add(n);else state.filters.costs.delete(n);state.perPage=48;paintFilterResults();}
     const map={catalogCategory:'category',catalogRarity:'rarity',catalogAttribute:'attribute',catalogCounter:'counter',catalogSort:'sort',catalogEffectMode:'effectMode',catalogEffectTarget:'effectTarget',catalogTraitMode:'traitMode',catalogOwned:'ownedOnly',catalogNoVariants:'hideVariants'};
     if(e.target.id in map){state.filters[map[e.target.id]]=e.target.type==='checkbox'?e.target.checked:e.target.value;state.perPage=48;paintFilterResults();}
