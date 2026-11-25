@@ -1387,7 +1387,7 @@
     const nav=e.target.closest('[data-view]');if(nav){setView(nav.dataset.view);return;}
     const btn=e.target.closest('[data-action]');if(!btn)return;
     const action=btn.dataset.action, id=btn.dataset.id;
-    const writes=['bulk-catalog-add','bulk-catalog-move','bulk-catalog-delete','bulk-inventory-move','bulk-inventory-delete','add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
+    const writes=['detail-add-deck','detail-add-copy','bulk-catalog-add','bulk-catalog-move','bulk-catalog-delete','bulk-inventory-move','bulk-inventory-delete','add-numbered-box','clone-deck','save-filter','delete-filter','new-deck','rename-deck','delete-deck','deck-set-leader','deck-add','deck-plus','deck-minus','add-location','edit-location','remove-location','delete-entry','plus','minus','add-card','open-custom','open-bulk','open-import','edit-entry'];
     if(writes.includes(action)&&!requireCloudEdit())return;
     if(action==='bulk-select-visible-inventory'){
       const rows=inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS);
@@ -1443,6 +1443,22 @@
     if(action==='open-custom'){openAdd();return;}
     if(action==='open-bulk'){openBulk();return;}
     if(action==='open-import'){toast('Full backup replacement is disabled. Use CSV import or the migration instructions.',true);return;}
+
+    if(action==='card-detail'){openCardDetail(id);return;}
+    if(action==='detail-add-copy'){openAdd(baseCatalogCard(id)||catalogCard(id));return;}
+    if(action==='detail-show-inventory'){
+      hideCardHover();closeModal();state.inventoryQuery=id;state.inventoryLocation='all';setView('inventory');return;
+    }
+    if(action==='detail-add-deck'){
+      const card=baseCatalogCard(id),deck=selectedDeck();
+      if(!deck){toast('Create a deck first.',true);return;}
+      if(card?.category==='Leader'){
+        const conflicts=deck.cards.filter(x=>{const c=baseCatalogCard(x.cardId);return c&&!validForLeader(c,id);});
+        if(conflicts.length&&!confirm('New Leader has '+conflicts.length+' incompatible card types. Keep this draft?'))return;
+        deck.leaderId=id;deck.updatedAt=dateNow();closeModal();persist();render();toast('Leader updated.');return;
+      }
+      closeModal();addDeckCard(id,1);return;
+    }
     if(action==='add-card'){openAdd(catalogCard(id));return;}
     if(action==='more-cards'){state.perPage+=48;paintFilterResults();return;}
     if(action==='add-location'){openLocation();return;}
