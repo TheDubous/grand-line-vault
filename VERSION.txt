@@ -1,1 +1,1 @@
-Grand Line Vault 1.3.0 — card zoom/details, multi-color filters, deck studio, cost curve, Prepare deck.
+Grand Line Vault 1.4.0 — sourced tournament decklists, owned-card substitutions and experimental draft recommendations.

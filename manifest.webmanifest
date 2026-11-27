@@ -1,8 +1,8 @@
 {
   "name": "Grand Line Vault — One Piece TCG Storage",
   "short_name": "Grand Line Vault",
-  "description": "Grand Line Vault 1.3.0 — fixed dual targets, multi-color filters, card details, deck studio and physical picking checklist, private live shared inventory.",
-  "start_url": "./?v=1.3.0",
+  "description": "Grand Line Vault 1.4.0 — fixed dual targets, multi-color filters, card details, deck studio and physical picking checklist, private live shared inventory.",
+  "start_url": "./?v=1.4.0",
   "scope": "./",
   "display": "standalone",
   "background_color": "#fcf9f5",

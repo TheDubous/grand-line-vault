@@ -517,3 +517,62 @@ a{color:#915575}
  .card-detail-art img{max-height:390px}
  .card-detail-metadata{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Grand Line Vault v1.4.0 — source-backed Deck Intelligence */
+.intel-layout{display:grid;grid-template-columns:minmax(300px,.94fr) minmax(360px,1.16fr);gap:18px;align-items:start}
+.intel-layout>.panel{min-width:0}
+.intel-layout .section-heading{margin:0 0 14px}
+.intel-layout .toolbar label{display:grid;gap:5px;font-size:12px;color:#a9bcce}
+.intel-sources .toolbar select{width:100%;max-width:270px;min-width:155px}
+.intel-sources .toolbar{align-items:end}
+.intel-source-list{display:grid;gap:10px;margin-top:16px;max-height:980px;overflow-y:auto;overscroll-behavior:contain}
+.intel-source-card{background:#182c42;border:1px solid #334a64;border-radius:11px;padding:11px;display:flex;gap:12px;align-items:center;min-width:0}
+.intel-source-card>img{width:58px;height:80px;object-fit:contain;flex:0 0 auto;background:#0e2036;border-radius:6px}
+.intel-source-info{display:grid;gap:5px;flex:1;min-width:0}
+.intel-source-info strong{font-size:13px;color:#f6e2b8;overflow-wrap:anywhere}
+.intel-source-info small{font-size:11px;color:#a7b7c9;overflow-wrap:anywhere}
+.intel-progress{width:100%;max-width:190px;height:7px;overflow:hidden;background:#33465b;border-radius:8px;margin:3px 0}
+.intel-progress>span{display:block;height:100%;border-radius:8px;background:#68caa3}
+.intel-heading{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;align-items:start}
+.intel-heading h2{font-family:Georgia,serif;margin:8px 0 6px;line-height:1.2;font-size:25px}
+.intel-heading .hint{line-height:1.6;max-width:600px}
+.intel-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:16px 0}
+.intel-summary span{display:grid;gap:4px;background:#1b3047;border:1px solid #354d67;border-radius:10px;padding:11px;color:#a8bfd3;font-size:11px}
+.intel-summary strong{color:#f4deae;font-size:21px;font-weight:800}
+.intel-actions,.intel-draft-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.intel-analysis h3{font-size:14px;margin:20px 0 10px}
+.intel-analysis h3:first-child{margin-top:0}
+.intel-warning,.intel-error,.intel-success{padding:10px 12px;border-radius:9px;line-height:1.55;font-size:12px}
+.intel-warning{background:#2d2b2d;border:1px solid #67563e;color:#f2d69f;margin:12px 0}
+.intel-error{background:#4b2b36;border:1px solid #b15c64;color:#ffd2d7;margin:10px 0}
+.intel-success{background:#1c4439;color:#bcead6;border:1px solid #3e8467}
+.intel-missing-list{display:grid;gap:12px}
+.intel-missing{border:1px solid #344961;border-radius:10px;padding:11px;background:#13273b}
+.intel-missing-head{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;margin-bottom:9px}
+.intel-missing-head strong{font-size:12px}
+.intel-missing-head small{font-size:11px;color:#b9ad91}
+.intel-suggestion{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:10px 0;border-top:1px solid #34485c}
+.intel-suggestion>div{display:grid;gap:4px;min-width:0;flex:1}
+.intel-suggestion strong{font-size:12px;color:#f0debb}
+.intel-suggestion small{font-size:11px;color:#a9bfd0;line-height:1.4;overflow-wrap:anywhere}
+.intel-changes{padding:11px;background:#1b3c39;border:1px solid #3b6b61;border-radius:11px}
+.intel-changes p{font-size:12px;line-height:1.5;border-top:1px solid #4b766c;padding-top:7px}
+.intel-changes small{color:#b0d7c9}
+.intel-list{display:grid;gap:7px;margin-top:13px;max-height:360px;overflow:auto}
+.intel-list>div{display:flex;gap:7px;justify-content:space-between;align-items:baseline;border-bottom:1px solid #34495e;padding:4px 0}
+.intel-list span{font-size:12px}
+.intel-list small{font-size:11px;color:#9eb3c8}
+.intel-full-list{border-top:1px solid #374d61;margin-top:17px;padding-top:14px}
+.intel-full-list summary{cursor:pointer;font-weight:750;color:#edc87e}
+.intel-import{margin-top:20px;max-width:1000px}
+.intel-import .form-fields{max-width:760px}
+.intel-import textarea{resize:vertical;min-height:120px}
+@media(max-width:1180px){.intel-layout{grid-template-columns:1fr}.intel-source-list{max-height:460px}.intel-summary{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:690px){
+  .intel-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .intel-source-card{gap:8px;padding:9px}
+  .intel-source-card>img{width:46px;height:65px}
+  .intel-source-card .button{white-space:normal;padding:8px}
+  .intel-analysis .button,.intel-actions .button{white-space:normal}
+}
