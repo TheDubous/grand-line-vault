@@ -17,6 +17,9 @@ jobs:
         with:
           node-version: '22'
       - name: Validate app syntax
-        run: node --check app.js
+        run: |
+          node --check app.js
+          node --check deck-intelligence.js
+          node --check scripts/sync-limitless-op.mjs
       - name: Run regression tests
         run: for test in tests/*.cjs; do echo "Running $test"; node "$test"; done
