@@ -143,11 +143,12 @@
     const needed=ref.cards.reduce((n,c)=>n+c.qty,0);
     return {ownedCopies,needed,missing,leaderOwned,missingCopies:needed-ownedCopies,coverage:needed?Math.round(ownedCopies/needed*100):0};
   }
-  function alternatives(cardId,ref,{catalog=[],inventory=[],basis=null,strictOwned=true,cap=8}={}){
+  function alternatives(cardId,ref,{catalog=[],inventory=[],basis=null,strictOwned=true,cap=8,references=[]}={}){
     const map=catalogMap(catalog),needed=map.get(norm(cardId)),leader=map.get(ref.leaderId);
     if(!needed||!leader)return [];
     const own=ownedMap(inventory),inList=new Map((basis?.cards||ref.cards).map(x=>[x.cardId,x.qty]));
     const results=[];
+    const peers=references.filter(x=>x.leaderId===ref.leaderId&&Array.isArray(x.cards)&&x.sourceType==='tournament');
     for(const c of map.values()){
       const id=norm(c.id);
       if(id===cardId||!CARD_CATEGORIES.has(c.category)||c.category!==needed.category)continue;
@@ -156,13 +157,17 @@
       const available=Math.min(4-already,(strictOwned?(own.get(id)||0)-already:4-already));
       if(available<=0)continue;
       const fit=confidence(needed,c);
-      results.push({cardId:id,name:c.name||id,available,score:fit.score,
-        roleMatches:fit.roleMatches,why:fit.reasons,confidence:fit.exactRole?'Role-supported':'Experimental'});
+      const appearances=peers.filter(x=>x.cards.some(line=>line.cardId===id)).length;
+      const evidence=peers.length>=3?Math.round(8*appearances/peers.length):0;
+      const why=fit.reasons.slice();
+      if(peers.length>=3&&appearances)why.push('Used in '+appearances+'/'+peers.length+' sampled tournament lists with this Leader');
+      results.push({cardId:id,name:c.name||id,available,score:Math.min(100,fit.score+evidence),
+        roleMatches:fit.roleMatches,why,confidence:fit.exactRole?'Role-supported':'Experimental',evidence:{appearances,sample:peers.length}});
     }
     results.sort((a,b)=>b.score-a.score||b.roleMatches-a.roleMatches||a.cardId.localeCompare(b.cardId));
     return results.slice(0,cap);
   }
-  function generateOwned(ref,{catalog=[],inventory=[],mode='balanced'}={}){
+  function generateOwned(ref,{catalog=[],inventory=[],mode='balanced',references=[]}={}){
     const map=catalogMap(catalog),own=ownedMap(inventory),leader=map.get(ref.leaderId);
     const placed=new Map(),changes=[],unfilled=[];
     for(const line of ref.cards){
@@ -176,7 +181,7 @@
       // Recalculate allowed quantities after each inserted alternative.
       const desired=map.get(gap.cardId);
       if(!desired)continue;
-      for(const c of alternatives(gap.cardId,ref,{catalog,inventory,basis:{cards:[...placed].map(([cardId,qty])=>({cardId,qty}))},cap:25})){
+      for(const c of alternatives(gap.cardId,ref,{catalog,inventory,basis:{cards:[...placed].map(([cardId,qty])=>({cardId,qty}))},cap:25,references})){
         if(remaining<=0)break;
         if(mode==='conservative'&&c.roleMatches===0)continue;
         if(mode!=='experimental'&&c.score<35)continue;
@@ -192,7 +197,7 @@
     const draft={...ref,cards,sourceType:'personal-variant',name:ref.name+' · owned adaptation'};
     return {draft,changes,unfilled:Math.max(0,50-total),issues:guard(draft,catalog,total===50)};
   }
-  function upgradeIdeas(ref,{catalog=[],inventory=[],cap=10}={}){
+  function upgradeIdeas(ref,{catalog=[],inventory=[],cap=10,references=[]}={}){
     const map=catalogMap(catalog),owner=ownedMap(inventory),out=[];
     const leader=map.get(ref.leaderId);
     if(!leader)return [];
@@ -200,7 +205,7 @@
     for(const item of ref.cards){
       const current=map.get(item.cardId);
       if(!current||!CARD_CATEGORIES.has(current.category))continue;
-      const alts=alternatives(item.cardId,ref,{catalog,inventory,basis:ref,cap:6});
+      const alts=alternatives(item.cardId,ref,{catalog,inventory,basis:ref,cap:6,references});
       for(const alt of alts.filter(x=>x.score>=50)){
         const newer=map.get(alt.cardId),sameCost=Math.abs((Number(newer.cost)||0)-(Number(current.cost)||0));
         const reason=alt.why.slice();
