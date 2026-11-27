@@ -1639,6 +1639,61 @@
       if(['add','move','delete'].includes(kind))openBulkSelection(source,kind);
       return;
     }
+
+    if(action==='intel-open'){
+      const ref=state.intel.feed.find(x=>x.id===id);
+      if(!ref){toast('This source deck is not currently available.',true);return;}
+      state.intel.ref=ref;state.intel.draft=null;state.intel.mode='exact';state.intel.changes=[];render();return;
+    }
+    if(action==='intel-reload'){loadDeckIntelligence();return;}
+    if(action==='intel-more'){state.intel.display=Math.min(180,state.intel.display+20);render();return;}
+    if(action==='intel-clear'){state.intel.ref=null;state.intel.draft=null;render();return;}
+    if(action==='intel-exact'||action==='intel-reset-preview'){
+      if(!state.intel.ref)return;
+      state.intel.draft=null;state.intel.changes=[];state.intel.mode='exact';render();return;
+    }
+    if(action==='intel-owned'||action==='intel-experiment'){
+      const reference=state.intel.ref;if(!reference)return;
+      const mode=action==='intel-owned'?'balanced':'experimental';
+      const proposal=engine().generateOwned(reference,{catalog:state.catalog,inventory:state.data.entries,mode});
+      state.intel.draft=proposal.draft;
+      state.intel.mode=action==='intel-owned'?'owned':'experimental';
+      state.intel.changes=proposal.changes||[];
+      if(proposal.unfilled)toast(proposal.unfilled+' slots remain unfilled; keep refining or obtain missing cards.',true);
+      render();return;
+    }
+    if(action==='intel-swap'){
+      if(!state.intel.ref)return;
+      const from=btn.dataset.from,to=btn.dataset.to;
+      try{
+        state.intel.draft=engine().applySwap(state.intel.draft||state.intel.ref,from,to,
+          {catalog:state.catalog,inventory:state.data.entries,ownedOnly:true});
+        const fit=engine().confidence(baseCatalogCard(from),baseCatalogCard(to));
+        state.intel.changes=[...state.intel.changes,{from,to,qty:1,score:fit.score,confidence:fit.exactRole?'Role-supported':'Experimental',why:fit.reasons}];
+        state.intel.mode='custom';render();
+      }catch(err){toast(err.message||String(err),true);}
+      return;
+    }
+    if(action==='intel-export'||action==='intel-save'){
+      if(!state.intel.ref)return;
+      const I=engine(),draft=state.intel.draft||state.intel.ref,check=I.guard(draft,state.catalog,true);
+      if(check.errors.length){toast(check.errors.join(' · '),true);return;}
+      if(action==='intel-export'){
+        downloadText('grand-line-vault-recommendation-'+draft.leaderId+'.txt',I.exported(draft));
+        return;
+      }
+      if(!requireCloudEdit())return;
+      if(state.data.decks.length>=1000){toast('Deck limit reached.',true);return;}
+      const suggested=(state.intel.ref.name+' · '+(state.intel.mode==='exact'?'reference':state.intel.mode+' recommendation')).slice(0,100);
+      const name=prompt('Save a NEW virtual deck as:',suggested);
+      if(!name?.trim())return;
+      const d={id:uid(),name:name.trim().slice(0,100),leaderId:draft.leaderId,
+        cards:draft.cards.map(c=>({cardId:c.cardId,qty:c.qty})),reserved:false,createdAt:dateNow(),updatedAt:dateNow()};
+      state.data.decks.push(d);state.activeDeckId=d.id;
+      if(!persist()){state.data.decks=state.data.decks.filter(x=>x.id!==d.id);toast('Cloud unavailable — virtual deck not saved.',true);return;}
+      toast('Saved as a new virtual deck (physical inventory unchanged).');
+      setView('decks');return;
+    }
     if(action==='add-numbered-box'){
       const used=new Set(state.data.locations.map(l=>{const m=/^box\s+(\d+)$/i.exec(l.name);return m?Number(m[1]):null}));
       let n=1;while(used.has(n))n++;state.data.locations.push({id:uid(),name:'Box '+n,kind:'Box',note:''});persist();render();toast('Created Box '+n);return;
@@ -1756,6 +1811,18 @@
     const f=new FormData(form), type=form.dataset.form;
     if(['bulk-selected-add','bulk-selected-move','bulk-selected-delete','import-deck','import-inventory-csv','new-deck','rename-deck','scan-add','add-entry','edit-entry','location','bulk'].includes(type)&&!requireCloudEdit())return;
     if(type.startsWith('bulk-selected-')){applySelectedBulk(form);return;}
+
+    if(type==='intel-import'){
+      const parsed=engine().parseTextDeck(String(f.get('list')||''));
+      if(!parsed){toast('Please paste one Leader plus exactly 50 legal-count main-deck cards in OPTCGSim format.',true);return;}
+      const name=String(f.get('name')||'').trim().slice(0,100);
+      if(name)parsed.name=name;
+      const url=String(f.get('sourceUrl')||'').trim();
+      if(url&&/^https:\/\/[^\s]+$/i.test(url))parsed.url=url.slice(0,650);
+      parsed.id='personal-'+uid();parsed.source='User imported · unverified';
+      state.intel.ref=parsed;state.intel.draft=null;state.intel.changes=[];state.intel.mode='exact';
+      state.intel.loaded=true;render();toast('Imported list analyzed. No inventory changes made.');return;
+    }
     if(type==='import-deck'){readDeckImport(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='import-inventory-csv'){importExternalCsv(form).catch(err=>toast(err.message||String(err),true));return;}
     if(type==='cloud-config'){
@@ -1908,6 +1975,8 @@
       inventoryFilteredRecords().slice(0,MAX_BULK_RECORDS).forEach(r=>e.target.checked?state.bulkInventoryIds.add(r.id):state.bulkInventoryIds.delete(r.id));
       render();return;
     }
+    if(e.target.id==='intelLeaderFilter'){state.intel.leaderFilter=e.target.value;state.intel.display=20;render();return;}
+    if(e.target.id==='intelMissingFilter'){state.intel.maxMissing=Number(e.target.value);state.intel.display=20;render();return;}
     if(e.target.id==='catalogSet'){state.set=e.target.value;state.perPage=48;paintFilterResults();}
     if(e.target.dataset.filterColor!==undefined){const c=e.target.dataset.filterColor;if(COLOR_OPTIONS.includes(c)){if(e.target.checked)state.colors.add(c);else state.colors.delete(c);state.perPage=48;paintFilterResults();}return;}
     if(e.target.dataset.filterCost!==undefined){const n=Number(e.target.dataset.filterCost);if(e.target.checked)state.filters.costs.add(n);else state.filters.costs.delete(n);state.perPage=48;paintFilterResults();}
