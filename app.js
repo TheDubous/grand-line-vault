@@ -1124,6 +1124,151 @@
     if(ok)toast('Cloud saved '+fmt(affected)+' copies.');
     else toast('Cloud save failed. Reload the shared collection before trying again.',true);
   }
+
+  // Deck Intelligence: local matching of the user's private collection against
+  // public, explicitly attributed source lists. No inventory is uploaded.
+  const engine=()=>window.DeckIntelligence;
+  async function loadDeckIntelligence(){
+    state.intel.error='';
+    try{
+      const response=await fetch('data/recommended-decks.json?v=1.4.0',{cache:'no-store'});
+      if(!response.ok)throw Error('Feed HTTP '+response.status);
+      const data=await response.json();
+      if(!Array.isArray(data.decks))throw Error('Invalid deck feed');
+      state.intel.feed=data.decks.map(d=>engine().normalize(d)).filter(Boolean);
+      state.intel.generatedAt=data.generatedAt||'';
+    }catch(err){state.intel.error=String(err.message||err);state.intel.feed=[];}
+    finally{state.intel.loaded=true;if(state.view==='intelligence')render();}
+  }
+  function intelRanked(){
+    const I=engine(),t=state.intel,own=I.ownedMap(state.data.entries);
+    return t.feed.map(ref=>({ref,coverage:I.availability(ref,state.data.entries)}))
+      .filter(row=>{
+        if(t.leaderFilter==='owned'&&!own.get(row.ref.leaderId))return false;
+        if(t.leaderFilter!=='all'&&t.leaderFilter!=='owned'&&row.ref.leaderId!==t.leaderFilter)return false;
+        return t.maxMissing===99||row.coverage.missingCopies<=t.maxMissing;
+      }).sort((a,b)=>b.coverage.coverage-a.coverage.coverage||
+        a.coverage.missingCopies-b.coverage.missingCopies||
+        Date.parse(b.ref.eventDate||0)-Date.parse(a.ref.eventDate||0)||
+        (a.ref.placing||999)-(b.ref.placing||999));
+  }
+  function intelTotals(ref){
+    const counts=engine().availability(ref,state.data.entries);
+    const status=engine().guard(ref,state.catalog);
+    return {counts,status};
+  }
+  function intelReferenceList(){
+    const t=state.intel,ranked=intelRanked(),list=ranked.slice(0,t.display);
+    const results=list.map(({ref,coverage})=>{
+      const leader=baseCatalogCard(ref.leaderId);
+      return '<article class="intel-source-card"><img class="preview-trigger" data-card-preview="'+escapeHtml(ref.leaderId)+'" data-action="card-detail" data-id="'+escapeHtml(ref.leaderId)+'" loading="lazy" src="'+escapeHtml(leader?.image||imageUrl(ref.leaderId))+'" alt="">'+
+        '<div class="intel-source-info"><strong>'+escapeHtml(leader?.name||ref.name||ref.leaderId)+'</strong>'+
+        '<small>'+escapeHtml(ref.leaderId)+' · '+escapeHtml(ref.event||ref.source)+'</small>'+
+        '<small>'+escapeHtml(ref.eventDate?friendlyDate(ref.eventDate):'Date unknown')+
+        (ref.placing?' · Place #'+ref.placing:'')+'</small>'+
+        '<div class="intel-progress" role="meter" aria-valuenow="'+coverage.coverage+'" aria-valuemin="0" aria-valuemax="100"><span style="width:'+coverage.coverage+'%"></span></div>'+
+        '<small>'+coverage.ownedCopies+'/50 owned · '+coverage.missingCopies+' missing'+(!coverage.leaderOwned?' · Leader missing':'')+'</small></div>'+
+        '<button type="button" class="button btn-outline tiny" data-action="intel-open" data-id="'+escapeHtml(ref.id)+'">Analyze</button></article>';
+    }).join('');
+    return '<section class="panel intel-sources"><div class="section-heading"><h2>Tournament references</h2><span class="hint">'+ranked.length+' matching lists</span></div>'+
+      '<div class="toolbar"><label>Leader <select class="select" id="intelLeaderFilter">'+
+        '<option value="owned" '+(t.leaderFilter==='owned'?'selected':'')+'>Leaders I own</option>'+
+        '<option value="all" '+(t.leaderFilter==='all'?'selected':'')+'>All Leaders</option>'+
+        [...new Set(t.feed.map(x=>x.leaderId))].sort().map(id=>'<option value="'+escapeHtml(id)+'" '+(t.leaderFilter===id?'selected':'')+'>'+escapeHtml(baseCatalogCard(id)?.name||id)+' · '+escapeHtml(id)+'</option>').join('')+
+        '</select></label>'+
+        '<label>Missing main-deck copies <select class="select" id="intelMissingFilter">'+
+        [0,5,10,25,99].map(n=>'<option value="'+n+'" '+(t.maxMissing===n?'selected':'')+'>'+(n===99?'Any':n===0?'0 (fully owned)':'Up to '+n)+'</option>').join('')+
+        '</select></label><button class="button btn-outline small" data-action="intel-reload" type="button">Refresh feed</button></div>'+
+        '<p class="hint">'+(t.generatedAt?'Feed updated '+escapeHtml(friendlyDate(t.generatedAt))+'. ':'')+
+        'Results come from the public Limitless tournament API and represent historical events. No live ban-list or win-rate claims are implied.</p>'+
+        (results?'<div class="intel-source-list">'+results+'</div>':
+          empty('♠','No matching tournament lists',t.feed.length?'Try All Leaders or increase the missing-card limit.':'No verified decklists synced yet. Use Import a deck below or run the GitHub refresh workflow.'))+
+        (ranked.length>list.length?'<button class="button btn-ghost small" type="button" data-action="intel-more">Show more</button>':'')+
+        (t.error?'<p class="intel-warning">Feed unavailable: '+escapeHtml(t.error)+'</p>':'')+'</section>';
+  }
+  function intelMissingHtml(ref){
+    const I=engine(),missing=I.availability(ref,state.data.entries).missing;
+    if(!missing.length)return '<p class="intel-success">All 50 main-deck copies are in your inventory.</p>';
+    const parts=missing.slice(0,20).map(item=>{
+      const original=baseCatalogCard(item.cardId);
+      const candidates=I.alternatives(item.cardId,ref,{catalog:state.catalog,inventory:state.data.entries,cap:3});
+      return '<div class="intel-missing"><div class="intel-missing-head"><strong>'+
+        item.missing+'× '+escapeHtml(original?.name||item.cardId)+'</strong><small>'+escapeHtml(item.cardId)+' · Have '+item.owned+'/'+item.required+'</small></div>'+
+        (candidates.length?candidates.map(x=>'<div class="intel-suggestion"><div><strong>'+escapeHtml(x.name)+'</strong>'+
+          '<small>'+escapeHtml(x.cardId)+' · '+x.available+' owned copies free for this reference · '+x.score+'/100 fit · '+escapeHtml(x.confidence)+'</small>'+
+          '<small>'+escapeHtml(x.why.slice(0,3).join(' · '))+'</small></div>'+
+          '<button class="button btn-outline tiny" data-action="intel-swap" data-from="'+escapeHtml(item.cardId)+'" data-to="'+escapeHtml(x.cardId)+'" type="button">Try swap</button></div>').join(''):
+          '<p class="hint">No legal-color alternative with spare owned copies found. This card may be essential.</p>')+'</div>';
+    }).join('');
+    return '<div class="intel-missing-list">'+parts+'</div>';
+  }
+  function intelDraftPanel(){
+    const I=engine(),t=state.intel,ref=t.ref;
+    if(!ref)return '<section class="panel intel-analysis">'+empty('♠','Choose a deck','Select a tournament list to see owned cards, missing copies and possible substitutions.')+'</section>';
+    const exact=intelTotals(ref);
+    const draft=t.draft||ref;
+    const status=I.guard(draft,state.catalog),available=I.availability(draft,state.data.entries);
+    const total=draft.cards.reduce((sum,c)=>sum+c.qty,0);
+    const sourceLabel=ref.sourceType==='tournament'?'Tournament reference':'User-imported reference (performance unverified)';
+    const changes=t.changes||[];
+    const leader=baseCatalogCard(ref.leaderId);
+    const referenceSource=ref.url?'<a href="'+escapeHtml(ref.url)+'" target="_blank" rel="noopener noreferrer">View source decklist</a>':'';
+    const changeText=changes.length?'<div class="intel-changes"><h3>Proposed substitutions</h3>'+
+      changes.map(x=>'<p><strong>'+x.qty+'× '+escapeHtml(x.from)+' → '+escapeHtml(x.to)+'</strong> · '+x.score+'/100 fit · '+escapeHtml(x.confidence||'Experimental')+
+      '<br><small>'+escapeHtml((x.why||[]).join('; '))+'</small></p>').join('')+'</div>':'';
+    const upgrades=I.upgradeIdeas(draft,{catalog:state.catalog,inventory:state.data.entries,cap:5});
+    const upgradesHtml=upgrades.length?'<div class="intel-upgrades"><h3>Try a flex-slot experiment</h3>'+
+      '<p class="hint">Heuristic ideas, not demonstrated tournament improvements. One owned card is substituted at a time.</p>'+
+      upgrades.map(x=>'<div class="intel-suggestion"><div><strong>'+escapeHtml(x.from)+' → '+escapeHtml(x.to)+'</strong>'+
+        '<small>'+x.score+'/100 similarity · '+escapeHtml(x.confidence)+'</small>'+
+        '<small>'+escapeHtml(x.why.slice(0,2).join(' · '))+'</small></div>'+
+        '<button class="button btn-outline tiny" type="button" data-action="intel-swap" data-from="'+escapeHtml(x.from)+'" data-to="'+escapeHtml(x.to)+'">Try swap</button></div>').join('')+'</div>':'';
+    const summary='<div class="intel-summary"><span><strong>'+exact.counts.ownedCopies+'/50</strong>reference owned</span>'+
+      '<span><strong>'+exact.counts.missingCopies+'</strong>missing copies</span>'+
+      '<span><strong>'+available.ownedCopies+'/'+total+'</strong>preview owned</span>'+
+      '<span><strong>'+status.errors.length+'</strong>validation errors</span></div>';
+    return '<section class="panel intel-analysis"><div class="overline">'+escapeHtml(sourceLabel)+'</div>'+
+      '<div class="intel-heading"><div><h2>'+escapeHtml(leader?.name||ref.name)+'</h2>'+
+      '<p class="hint">'+escapeHtml(ref.leaderId)+' · '+escapeHtml(ref.event||ref.source)+
+      (ref.placing?' · Place #'+ref.placing:'')+' '+referenceSource+'</p></div>'+
+      '<button class="button btn-ghost small" type="button" data-action="intel-clear">Close</button></div>'+summary+
+      '<div class="intel-actions"><button class="button btn-outline small" type="button" data-action="intel-exact">Exact reference</button>'+
+      '<button class="button btn-primary small" type="button" data-action="intel-owned">Build from owned cards</button>'+
+      '<button class="button btn-outline small" type="button" data-action="intel-experiment">Experimental owned build</button></div>'+
+      '<h3>Current preview: '+escapeHtml(t.mode==='exact'?'Original reference':t.mode==='owned'?'Owned-card adaptation':t.mode==='experimental'?'Experimental adaptation':'Custom edited draft')+'</h3>'+
+      '<p class="hint">Leader: '+escapeHtml(draft.leaderId)+' · Main deck '+total+'/50 · '+escapeHtml(ref.format==='unknown'?'Format not verified':ref.format)+
+      '. No cards are removed from inventory.</p>'+
+      (status.errors.length?'<div class="intel-error">'+status.errors.map(escapeHtml).join(' · ')+'</div>':'')+
+      '<p class="intel-warning">'+escapeHtml(status.warnings.slice(-1)[0]||'Official legality requires separate verification')+'</p>'+
+      '<div class="intel-draft-actions"><button class="button btn-primary small" data-action="intel-save" type="button" '+(total!==50||status.errors.length?'disabled':'')+'>Save as new deck</button>'+
+      '<button class="button btn-outline small" data-action="intel-export" type="button" '+(total!==50||status.errors.length?'disabled':'')+'>Export OPTCGSim</button>'+
+      '<button class="button btn-ghost small" data-action="intel-reset-preview" type="button">Reset preview</button></div>'+
+      changeText+
+      '<h3>Original list: missing cards & alternatives</h3>'+intelMissingHtml(ref)+
+      '<h3>Other potential upgrades</h3>'+upgradesHtml+
+      '<details class="intel-full-list"><summary>Show '+total+'-card preview list</summary><div class="intel-list">'+
+      draft.cards.slice().sort((a,b)=>a.cardId.localeCompare(b.cardId)).map(x=>{
+        const card=baseCatalogCard(x.cardId);
+        const have=I.ownedMap(state.data.entries).get(x.cardId)||0;
+        return '<div><span>'+x.qty+'× '+escapeHtml(card?.name||x.cardId)+' <small>'+escapeHtml(x.cardId)+'</small></span><small>'+Math.min(x.qty,have)+'/'+x.qty+' owned</small></div>';
+      }).join('')+'</div></details>'+
+      '</section>';
+  }
+  function intelligenceView(){
+    const t=state.intel;
+    return pageHeading('DECK INTELLIGENCE','Deck Recommender',
+      'Compare sourced tournament builds against your owned cards, replace missing copies and experiment with transparent suggestions.')+
+      '<div class="intel-layout">'+intelReferenceList()+intelDraftPanel()+'</div>'+
+      '<section class="panel intel-import"><h2>Import a reference deck</h2>'+
+      '<p class="hint">Paste an OPTCGSim / Limitless text list (Leader + exactly 50 main-deck cards). A manually imported list is not labeled tournament-proven, even when you enter a link.</p>'+
+      '<form data-form="intel-import"><div class="form-fields">'+
+      '<label>Deck title<input class="field" name="name" maxlength="100" placeholder="My reference build"></label>'+
+      '<label>Source URL (optional)<input class="field" name="sourceUrl" type="url" placeholder="https://..."></label>'+
+      '<label>Decklist<textarea name="list" rows="6" required placeholder="1xOP05-002&#10;4xOP05-015&#10;... (50 main-deck cards)"></textarea></label>'+
+      '<button class="button btn-primary" type="submit">Analyze imported deck</button></div></form>'+
+      '<p class="hint">Cards and storage data remain in your shared Supabase collection. This recommender only reads quantities until you explicitly save a new virtual deck.</p></section>';
+  }
+
   function inventoryTable(entries, compact=false) {
     const all=entries.length>0&&entries.every(e=>state.bulkInventoryIds.has(e.id));
     return `<div class="table-wrap"><table class="data-table"><thead><tr>${compact?'':`<th><input type="checkbox" data-select-inventory-all aria-label="Select all filtered inventory records" ${all?'checked':''}></th>`}<th>Card</th><th>Location / position</th><th>Copies</th>${compact?'':'<th>Actions</th>'}</tr></thead><tbody>${entries.map(e=>`<tr>${compact?'':`<td><input type="checkbox" data-select-inventory="${escapeHtml(e.id)}" aria-label="Select ${escapeHtml(e.cardId)} in ${escapeHtml(locationById(e.locationId)?.name||'Unsorted')}" ${state.bulkInventoryIds.has(e.id)?'checked':''}></td>`}<td><div class="card-cell">${miniImg(e.cardId)}<div><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.cardId)} · ${escapeHtml(e.rarity||'Card')}${reservedTotal(e.cardId)?` · Reserved ${reservedTotal(e.cardId)} across decks`:''}</small></div></div></td><td>${pill(e.locationId)}${e.slot?`<div class="hint">${escapeHtml(e.slot)}</div>`:''}</td><td>${compact?`<strong>${fmt(e.qty)}</strong>`:`<div class="quantity-ctrl"><button aria-label="Remove one copy" data-action="minus" data-id="${escapeHtml(e.id)}" type="button">−</button><strong>${fmt(e.qty)}</strong><button aria-label="Add one copy" data-action="plus" data-id="${escapeHtml(e.id)}" type="button">＋</button></div>`}</td>${compact?'':`<td><button class="button btn-outline tiny" data-action="edit-entry" data-id="${escapeHtml(e.id)}" type="button">Edit</button></td>`}</tr>`).join('')}</tbody></table></div>`;
