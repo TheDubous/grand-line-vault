@@ -1191,7 +1191,7 @@
     if(!missing.length)return '<p class="intel-success">All 50 main-deck copies are in your inventory.</p>';
     const parts=missing.slice(0,20).map(item=>{
       const original=baseCatalogCard(item.cardId);
-      const candidates=I.alternatives(item.cardId,ref,{catalog:state.catalog,inventory:state.data.entries,cap:3});
+      const candidates=I.alternatives(item.cardId,ref,{catalog:state.catalog,inventory:state.data.entries,cap:3,references:state.intel.feed});
       return '<div class="intel-missing"><div class="intel-missing-head"><strong>'+
         item.missing+'× '+escapeHtml(original?.name||item.cardId)+'</strong><small>'+escapeHtml(item.cardId)+' · Have '+item.owned+'/'+item.required+'</small></div>'+
         (candidates.length?candidates.map(x=>'<div class="intel-suggestion"><div><strong>'+escapeHtml(x.name)+'</strong>'+
@@ -1211,12 +1211,13 @@
     const total=draft.cards.reduce((sum,c)=>sum+c.qty,0);
     const sourceLabel=ref.sourceType==='tournament'?'Tournament reference':'User-imported reference (performance unverified)';
     const changes=t.changes||[];
+    const reservedOverlap=draft.cards.filter(c=>reservedTotal(c.cardId)>0).length;
     const leader=baseCatalogCard(ref.leaderId);
     const referenceSource=ref.url?'<a href="'+escapeHtml(ref.url)+'" target="_blank" rel="noopener noreferrer">View source decklist</a>':'';
     const changeText=changes.length?'<div class="intel-changes"><h3>Proposed substitutions</h3>'+
       changes.map(x=>'<p><strong>'+x.qty+'× '+escapeHtml(x.from)+' → '+escapeHtml(x.to)+'</strong> · '+x.score+'/100 fit · '+escapeHtml(x.confidence||'Experimental')+
       '<br><small>'+escapeHtml((x.why||[]).join('; '))+'</small></p>').join('')+'</div>':'';
-    const upgrades=I.upgradeIdeas(draft,{catalog:state.catalog,inventory:state.data.entries,cap:5});
+    const upgrades=I.upgradeIdeas(draft,{catalog:state.catalog,inventory:state.data.entries,cap:5,references:state.intel.feed});
     const upgradesHtml=upgrades.length?'<div class="intel-upgrades"><h3>Try a flex-slot experiment</h3>'+
       '<p class="hint">Heuristic ideas, not demonstrated tournament improvements. One owned card is substituted at a time.</p>'+
       upgrades.map(x=>'<div class="intel-suggestion"><div><strong>'+escapeHtml(x.from)+' → '+escapeHtml(x.to)+'</strong>'+
@@ -1240,6 +1241,7 @@
       '. No cards are removed from inventory.</p>'+
       (status.errors.length?'<div class="intel-error">'+status.errors.map(escapeHtml).join(' · ')+'</div>':'')+
       '<p class="intel-warning">'+escapeHtml(status.warnings.slice(-1)[0]||'Official legality requires separate verification')+'</p>'+
+      (reservedOverlap?'<p class="intel-warning">Some cards are reserved in existing decks ('+reservedOverlap+' card IDs). Owned quantities include reserved copies; check availability before assembling multiple decks.</p>':'')+
       '<div class="intel-draft-actions"><button class="button btn-primary small" data-action="intel-save" type="button" '+(total!==50||status.errors.length?'disabled':'')+'>Save as new deck</button>'+
       '<button class="button btn-outline small" data-action="intel-export" type="button" '+(total!==50||status.errors.length?'disabled':'')+'>Export OPTCGSim</button>'+
       '<button class="button btn-ghost small" data-action="intel-reset-preview" type="button">Reset preview</button></div>'+
@@ -1655,7 +1657,7 @@
     if(action==='intel-owned'||action==='intel-experiment'){
       const reference=state.intel.ref;if(!reference)return;
       const mode=action==='intel-owned'?'balanced':'experimental';
-      const proposal=engine().generateOwned(reference,{catalog:state.catalog,inventory:state.data.entries,mode});
+      const proposal=engine().generateOwned(reference,{catalog:state.catalog,inventory:state.data.entries,mode,references:state.intel.feed});
       state.intel.draft=proposal.draft;
       state.intel.mode=action==='intel-owned'?'owned':'experimental';
       state.intel.changes=proposal.changes||[];
