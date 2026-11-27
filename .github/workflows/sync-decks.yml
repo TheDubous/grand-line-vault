@@ -1,6 +1,11 @@
 name: Refresh One Piece tournament decklists
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-decks.yml'
+      - 'scripts/sync-limitless-op.mjs'
   schedule:
     - cron: "13 5 * * 1,4"
 permissions:
