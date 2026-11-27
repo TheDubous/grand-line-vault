@@ -12,7 +12,7 @@
   const modalLayer = document.querySelector('#modalLayer');
   const catalogStatus = document.querySelector('#catalogStatus');
   const toasts = document.querySelector('#toast');
-  const views = new Set(['dashboard', 'catalog', 'inventory', 'locations', 'scan', 'decks', 'cloud']);
+  const views = new Set(['dashboard', 'catalog', 'inventory', 'locations', 'scan', 'decks', 'intelligence', 'cloud']);
   const DEFAULT_LOCATION_ID = 'unsorted';
   const MAX_QTY = 999999;
   const dateNow = () => new Date().toISOString();
@@ -109,7 +109,7 @@
   const SCANNER_BOX_KEY = 'grand-line-vault-last-box-v1';
   const SCANNER_AUTO_KEY = 'grand-line-vault-auto-enabled';
   const scanner = {stream:null,worker:null,workerLoading:null,scriptLoading:null,busy:false,session:0,lastLocationId:(localStorage.getItem(SCANNER_BOX_KEY)||'box-1'),lastSlot:'',saved:0, autoEnabled:localStorage.getItem(SCANNER_AUTO_KEY)!=='off', autoPaused:false, autoTimer:null, scanToken:0, autoHistory:[], autoCandidateKey:'', autoCandidateSeenAt:0, autoCandidateHits:0, autoAttempt:0, autoIgnoreId:'', autoClearFrames:0, facing:'environment', dialogOpen:false, matchId:'', nameCandidates:[], detectedName:''};
-  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', colors:new Set(), set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), deckAvailability:'all', deckValidOnly:false, deckMobileTab:'pool', deckPickOpen:false, deckPick:{deckId:'',checked:new Set()}, activeDeckId:'', filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
+  const state = {view:'dashboard', data:loadData(), catalog:[], loaded:false, catalogError:'', catalogLoadedAt:null, query:'', color:'all', colors:new Set(), set:'all', perPage:48, inventoryQuery:'', inventoryLocation:'all', bulkInventoryIds:new Set(), bulkCatalogIds:new Set(), deckAvailability:'all', deckValidOnly:false, deckMobileTab:'pool', deckPickOpen:false, deckPick:{deckId:'',checked:new Set()}, activeDeckId:'', intel:{feed:[],loaded:false,error:'',ref:null,draft:null,changes:[],mode:'exact',leaderFilter:'owned',maxMissing:10,playstyle:'balanced',display:20}, filters: {effect:'',effectMode:'all',effectTarget:'both',trait:'',traitMode:'any',category:'all',rarity:'all',attribute:'all',counter:'all',powerMin:'',powerMax:'',costs:new Set(),ownedOnly:false,sort:'id',hideVariants:false}};
   const CLOUD_KEY = 'grand-line-vault-cloud-settings-v1';
 
   // v1.2: Supabase is the only editable source; localStorage is read-only cache.
@@ -215,6 +215,7 @@
     else if (state.view==='inventory') app.innerHTML=inventoryView();
     else if (state.view==='locations') app.innerHTML=locationsView();
     else if (state.view==='decks') app.innerHTML=decksView();
+    else if (state.view==='intelligence') app.innerHTML=intelligenceView();
     else if (state.view==='cloud') app.innerHTML=cloudView();
     else app.innerHTML=dashboardView();
     if(state.view==='catalog')paintCatalog();
@@ -1468,7 +1469,7 @@
     if(next===state.view){document.querySelector('.sidebar').classList.remove('open');return;}
     if(state.view==='scan' && next!=='scan'){scanner.dialogOpen=false;scanner.matchId='';closeModal();stopCamera();scanner.session++;scanner.busy=false;}
     state.view=next;document.querySelector('.sidebar').classList.remove('open');
-    render();window.scrollTo({top:0,behavior:'instant'});
+    render();if(next==='intelligence'&&!state.intel.loaded)loadDeckIntelligence();window.scrollTo({top:0,behavior:'instant'});
   }
 
   function paintFilterResults(){if(state.view==='catalog')paintCatalog();if(state.view==='decks')paintDeckPool();}
