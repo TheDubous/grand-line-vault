@@ -1,3 +1,29 @@
+# Grand Line Vault v1.4.0 — Deck Intelligence (proposed)
+
+A new Deck Intelligence page matches 50-card tournament/source references against the shared Supabase inventory. No physical cards or reservations are modified.
+
+## Provenance and automatic source refresh
+- The GitHub Actions workflow .github/workflows/sync-decks.yml can be launched manually after merge and is scheduled Monday and Thursday. It reads the documented Limitless One Piece tournament API (game OP) and recent standings.
+- Only valid 50-card main decks with a Leader and at most four copies per card are retained, along with tournament name, date, player, placing, and source URL.
+- No data is fabricated. The initial feed is empty until a successful API refresh; empty or failed refreshes do not overwrite it.
+- Reddit/community decks can be pasted into the manual import form with an optional URL; manually imported lists are never labeled tournament-verified. No automatic Reddit scraping.
+
+## Collection-aware recommendations
+- Count exact owned quantities across all boxes and filter lists by owned Leaders and missing main-deck copies.
+- Infer card roles from printed effects and suggest physically owned replacements with matching Leader colors, category, traits, DON cost, counters, and roles.
+- Every suggestion includes concrete reasons and a heuristic fit score, never a fabricated win rate.
+- Create owned or experimental variants; if enough suitable cards are unavailable, show missing slots instead of inventing a 50-card deck.
+- Try individual one-for-one swaps with guardrails and export a valid 50-card list to OPTCGSim or save as a new virtual deck.
+
+## Legality / limitations
+- Preliminary checks include 50 main cards, four copies per ID, Leader color compatibility, and a known November 27, 2026 restricted pair. This is NOT a complete current legality service. Confirm official bans, pairs, released card sets and event formats before tournament use.
+- Tournament evidence is historical. Reddit/other sites provide ideas but cannot prove a card upgrade increases win rate.
+- The recommender does not require a Supabase migration or change collection/deck storage.
+
+## Rollout
+- Review and merge PR into main. Run the GitHub Actions Refresh One Piece tournament decklists workflow once; it then refreshes on schedule. If no public decks are returned, inspect workflow logs.
+- Test with node tests/intelligence-v140.cjs; the existing CI workflow tests scanner, cloud, password and other deck workflows.
+
 ## Grand Line Vault v1.3.0 — Card Explorer + Deck Studio (proposed)
 
 - Card art in the English catalog, inventory and deck builder supports desktop hover zoom, keyboard Enter/Space and tap/click for a full card-detail window.
