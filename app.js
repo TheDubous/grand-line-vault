@@ -1197,7 +1197,7 @@
         (candidates.length?candidates.map(x=>'<div class="intel-suggestion"><div><strong>'+escapeHtml(x.name)+'</strong>'+
           '<small>'+escapeHtml(x.cardId)+' · '+x.available+' owned copies free for this reference · '+x.score+'/100 fit · '+escapeHtml(x.confidence)+'</small>'+
           '<small>'+escapeHtml(x.why.slice(0,3).join(' · '))+'</small></div>'+
-          '<button class="button btn-outline tiny" data-action="intel-swap" data-from="'+escapeHtml(item.cardId)+'" data-to="'+escapeHtml(x.cardId)+'" type="button">Try swap</button></div>').join(''):
+          '<button class="button btn-outline tiny" data-action="intel-swap" data-from="'+escapeHtml(item.cardId)+'" data-to="'+escapeHtml(x.cardId)+'" type="button" '+((state.intel.draft||ref).cards.some(c=>c.cardId===item.cardId)?'':'disabled title="Switch to Exact reference first"')+'>Try swap</button></div>').join(''):
           '<p class="hint">No legal-color alternative with spare owned copies found. This card may be essential.</p>')+'</div>';
     }).join('');
     return '<div class="intel-missing-list">'+parts+'</div>';
@@ -1691,8 +1691,11 @@
         cards:draft.cards.map(c=>({cardId:c.cardId,qty:c.qty})),reserved:false,createdAt:dateNow(),updatedAt:dateNow()};
       state.data.decks.push(d);state.activeDeckId=d.id;
       if(!persist()){state.data.decks=state.data.decks.filter(x=>x.id!==d.id);toast('Cloud unavailable — virtual deck not saved.',true);return;}
-      toast('Saved as a new virtual deck (physical inventory unchanged).');
-      setView('decks');return;
+      toast('Saving new virtual deck to shared cloud…');
+      waitForCloudSave().then(ok=>{
+        if(ok){toast('Cloud saved a new virtual deck. Physical inventory unchanged.');setView('decks');}
+        else toast('Deck save was not confirmed. Refresh Cloud sync before retrying.',true);
+      });return;
     }
     if(action==='add-numbered-box'){
       const used=new Set(state.data.locations.map(l=>{const m=/^box\s+(\d+)$/i.exec(l.name);return m?Number(m[1]):null}));
