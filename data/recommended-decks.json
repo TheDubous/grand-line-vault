@@ -1,7 +1,1650 @@
 {
   "version": 1,
-  "generatedAt": null,
+  "generatedAt": "2026-11-27T12:02:46.065Z",
   "source": "Limitless TCG public tournament API",
-  "note": "Feed has not been synced yet. Imported or personal decks can still be analyzed.",
-  "decks": []
+  "note": "Historical tournament lists. Format and current bans/restrictions must be checked separately.",
+  "decks": [
+    {
+      "id": "6afdc376b2fccaf0272d582d:zockerdima",
+      "leaderId": "OP18-021",
+      "cards": [
+        {
+          "cardId": "EB02-017",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-070",
+          "qty": 2
+        },
+        {
+          "cardId": "OP18-061",
+          "qty": 4
+        },
+        {
+          "cardId": "OP08-067",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-031",
+          "qty": 2
+        },
+        {
+          "cardId": "OP18-072",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-034",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-118",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-022",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-078",
+          "qty": 2
+        },
+        {
+          "cardId": "OP18-075",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-076",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-077",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-078",
+          "qty": 4
+        }
+      ],
+      "name": "Franky",
+      "player": "zockerdima",
+      "placing": 2,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/zockerdima/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afdc376b2fccaf0272d582d:neoerlandsson",
+      "leaderId": "OP15-058",
+      "cards": [
+        {
+          "cardId": "OP12-071",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-061",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-067",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-066",
+          "qty": 3
+        },
+        {
+          "cardId": "OP15-071",
+          "qty": 3
+        },
+        {
+          "cardId": "ST10-010",
+          "qty": 2
+        },
+        {
+          "cardId": "OP09-072",
+          "qty": 1
+        },
+        {
+          "cardId": "OP10-067",
+          "qty": 2
+        },
+        {
+          "cardId": "OP15-118",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-075",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-076",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-077",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-074",
+          "qty": 3
+        },
+        {
+          "cardId": "OP13-076",
+          "qty": 1
+        },
+        {
+          "cardId": "OP05-077",
+          "qty": 3
+        }
+      ],
+      "name": "Enel",
+      "player": "Dude Neo",
+      "placing": 3,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/neoerlandsson/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afdc376b2fccaf0272d582d:kevnoa",
+      "leaderId": "OP09-042",
+      "cards": [
+        {
+          "cardId": "OP09-056",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-047",
+          "qty": 2
+        },
+        {
+          "cardId": "OP18-051",
+          "qty": 2
+        },
+        {
+          "cardId": "ST25-002",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-005",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-056",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-001",
+          "qty": 2
+        },
+        {
+          "cardId": "OP09-048",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-049",
+          "qty": 2
+        },
+        {
+          "cardId": "P-084",
+          "qty": 2
+        },
+        {
+          "cardId": "ST25-003",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-021",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-051",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-059",
+          "qty": 2
+        },
+        {
+          "cardId": "OP09-057",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-058",
+          "qty": 2
+        }
+      ],
+      "name": "Buggy",
+      "player": "Kevnoa",
+      "placing": 4,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/kevnoa/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afdc376b2fccaf0272d582d:rubentr",
+      "leaderId": "ST10-002",
+      "cards": [
+        {
+          "cardId": "OP01-016",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-002",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-033",
+          "qty": 4
+        },
+        {
+          "cardId": "ST21-003",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-074",
+          "qty": 4
+        },
+        {
+          "cardId": "OP05-067",
+          "qty": 3
+        },
+        {
+          "cardId": "ST18-001",
+          "qty": 3
+        },
+        {
+          "cardId": "EB01-061",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-007",
+          "qty": 4
+        },
+        {
+          "cardId": "P-107",
+          "qty": 3
+        },
+        {
+          "cardId": "OP05-119",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-078",
+          "qty": 3
+        },
+        {
+          "cardId": "ST31-005",
+          "qty": 4
+        }
+      ],
+      "name": "Monkey.D.Luffy",
+      "player": "RubenTR",
+      "placing": 5,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/rubentr/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afdc376b2fccaf0272d582d:fuat",
+      "leaderId": "OP17-039",
+      "cards": [
+        {
+          "cardId": "OP08-051",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-050",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-045",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-054",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-052",
+          "qty": 1
+        },
+        {
+          "cardId": "OP17-046",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-042",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-044",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-049",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-040",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-048",
+          "qty": 4
+        },
+        {
+          "cardId": "OP14-049",
+          "qty": 1
+        },
+        {
+          "cardId": "OP17-118",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-055",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-056",
+          "qty": 4
+        }
+      ],
+      "name": "Rocks.D.Xebec",
+      "player": "TTP Fuat",
+      "placing": 6,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/fuat/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afdc376b2fccaf0272d582d:solmyr",
+      "leaderId": "OP09-042",
+      "cards": [
+        {
+          "cardId": "OP09-056",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-002",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-004",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-005",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-056",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-001",
+          "qty": 3
+        },
+        {
+          "cardId": "OP09-048",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-051",
+          "qty": 3
+        },
+        {
+          "cardId": "OP12-049",
+          "qty": 2
+        },
+        {
+          "cardId": "P-084",
+          "qty": 1
+        },
+        {
+          "cardId": "ST25-003",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-021",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-051",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-057",
+          "qty": 4
+        },
+        {
+          "cardId": "EB02-031",
+          "qty": 1
+        }
+      ],
+      "name": "Buggy",
+      "player": "Solmyr",
+      "placing": 7,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/solmyr/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afdc376b2fccaf0272d582d:vladtiv",
+      "leaderId": "OP17-039",
+      "cards": [
+        {
+          "cardId": "OP08-051",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-050",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-045",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-052",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-054",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-046",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-042",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-044",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-049",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-040",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-048",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-118",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-055",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-056",
+          "qty": 4
+        }
+      ],
+      "name": "Rocks.D.Xebec",
+      "player": "vladtiv",
+      "placing": 8,
+      "event": "[OP18] ChinoizeCup #141 WEDNESDAY",
+      "eventDate": "2026-11-25T19:00:00.000Z",
+      "players": 78,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afdc376b2fccaf0272d582d/player/vladtiv/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6af5aceedcbca32da6c4f190:serifisss",
+      "leaderId": "ST30-001",
+      "cards": [
+        {
+          "cardId": "OP01-016",
+          "qty": 4
+        },
+        {
+          "cardId": "EB02-017",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-002",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-015",
+          "qty": 4
+        },
+        {
+          "cardId": "ST30-012",
+          "qty": 4
+        },
+        {
+          "cardId": "ST21-014",
+          "qty": 4
+        },
+        {
+          "cardId": "ST31-001",
+          "qty": 4
+        },
+        {
+          "cardId": "OP04-016",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-017",
+          "qty": 4
+        },
+        {
+          "cardId": "OP18-038",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-037",
+          "qty": 3
+        },
+        {
+          "cardId": "OP13-040",
+          "qty": 3
+        },
+        {
+          "cardId": "ST31-005",
+          "qty": 4
+        }
+      ],
+      "name": "Luffy & Ace",
+      "player": "Serifisss",
+      "placing": 1,
+      "event": "[OP18]Win a Box - Aegean Pirate Cup #7",
+      "eventDate": "2026-11-19T19:00:00.000Z",
+      "players": 15,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6af5aceedcbca32da6c4f190/player/serifisss/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6af5aceedcbca32da6c4f190:cardboardlover",
+      "leaderId": "ST10-002",
+      "cards": [
+        {
+          "cardId": "OP01-016",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-033",
+          "qty": 4
+        },
+        {
+          "cardId": "ST21-003",
+          "qty": 2
+        },
+        {
+          "cardId": "OP05-067",
+          "qty": 4
+        },
+        {
+          "cardId": "ST18-001",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-074",
+          "qty": 4
+        },
+        {
+          "cardId": "EB01-061",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-007",
+          "qty": 4
+        },
+        {
+          "cardId": "P-107",
+          "qty": 3
+        },
+        {
+          "cardId": "OP05-119",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-078",
+          "qty": 4
+        },
+        {
+          "cardId": "OP07-076",
+          "qty": 1
+        },
+        {
+          "cardId": "ST31-005",
+          "qty": 4
+        }
+      ],
+      "name": "Monkey.D.Luffy",
+      "player": "cardboardlover",
+      "placing": 2,
+      "event": "[OP18]Win a Box - Aegean Pirate Cup #7",
+      "eventDate": "2026-11-19T19:00:00.000Z",
+      "players": 15,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6af5aceedcbca32da6c4f190/player/cardboardlover/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afb2de9b2fccaf0272d400b:gon_tcg",
+      "leaderId": "OP05-098",
+      "cards": [
+        {
+          "cardId": "OP17-113",
+          "qty": 4
+        },
+        {
+          "cardId": "OP11-106",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-107",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-109",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-102",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-113",
+          "qty": 2
+        },
+        {
+          "cardId": "EB04-058",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-106",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-114",
+          "qty": 4
+        },
+        {
+          "cardId": "OP14-104",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-119",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-112",
+          "qty": 4
+        },
+        {
+          "cardId": "EB02-052",
+          "qty": 2
+        },
+        {
+          "cardId": "OP06-115",
+          "qty": 4
+        },
+        {
+          "cardId": "OP06-117",
+          "qty": 1
+        }
+      ],
+      "name": "Enel",
+      "player": "Gonzalo Alonso",
+      "placing": 1,
+      "event": "Liga Phoenix 2026 -  ONE PIECE - MANA 45°",
+      "eventDate": "2026-11-17T21:42:00.000Z",
+      "players": 9,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afb2de9b2fccaf0272d400b/player/gon_tcg/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6afb2de9b2fccaf0272d400b:laaz_j",
+      "leaderId": "OP09-042",
+      "cards": [
+        {
+          "cardId": "OP09-056",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-001",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-002",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-004",
+          "qty": 4
+        },
+        {
+          "cardId": "ST25-005",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-056",
+          "qty": 3
+        },
+        {
+          "cardId": "OP09-045",
+          "qty": 3
+        },
+        {
+          "cardId": "OP09-048",
+          "qty": 3
+        },
+        {
+          "cardId": "OP16-051",
+          "qty": 1
+        },
+        {
+          "cardId": "P-084",
+          "qty": 2
+        },
+        {
+          "cardId": "ST25-003",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-021",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-051",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-057",
+          "qty": 4
+        },
+        {
+          "cardId": "OP06-058",
+          "qty": 2
+        }
+      ],
+      "name": "Buggy",
+      "player": "Jose Laaz",
+      "placing": 2,
+      "event": "Liga Phoenix 2026 -  ONE PIECE - MANA 45°",
+      "eventDate": "2026-11-17T21:42:00.000Z",
+      "players": 9,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6afb2de9b2fccaf0272d400b/player/laaz_j/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6ae92cdbe94eae0f94746038:antinomy22",
+      "leaderId": "OP17-058",
+      "cards": [
+        {
+          "cardId": "EB04-032",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-075",
+          "qty": 1
+        },
+        {
+          "cardId": "OP17-073",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-074",
+          "qty": 4
+        },
+        {
+          "cardId": "OP08-074",
+          "qty": 2
+        },
+        {
+          "cardId": "EB04-031",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-030",
+          "qty": 1
+        },
+        {
+          "cardId": "OP17-061",
+          "qty": 3
+        },
+        {
+          "cardId": "OP08-069",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-065",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-062",
+          "qty": 4
+        },
+        {
+          "cardId": "ST34-004",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-063",
+          "qty": 3
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-076",
+          "qty": 2
+        },
+        {
+          "cardId": "OP07-077",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-040",
+          "qty": 2
+        },
+        {
+          "cardId": "OP07-076",
+          "qty": 2
+        }
+      ],
+      "name": "Kaido",
+      "player": "Pio Cattoni [Bokogod]",
+      "placing": 2,
+      "event": "Liga Phoenix 2026 -  ONE PIECE - MANA 43°",
+      "eventDate": "2026-11-03T22:00:00.000Z",
+      "players": 10,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6ae92cdbe94eae0f94746038/player/antinomy22/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6addff8d97e21d82e5c6ec84:shirohige06",
+      "leaderId": "ST30-001",
+      "cards": [
+        {
+          "cardId": "OP01-016",
+          "qty": 4
+        },
+        {
+          "cardId": "EB02-017",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-002",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-023",
+          "qty": 2
+        },
+        {
+          "cardId": "OP12-015",
+          "qty": 4
+        },
+        {
+          "cardId": "ST30-012",
+          "qty": 4
+        },
+        {
+          "cardId": "ST21-014",
+          "qty": 4
+        },
+        {
+          "cardId": "ST31-001",
+          "qty": 4
+        },
+        {
+          "cardId": "OP04-016",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-037",
+          "qty": 2
+        },
+        {
+          "cardId": "OP13-040",
+          "qty": 2
+        },
+        {
+          "cardId": "OP14-019",
+          "qty": 2
+        },
+        {
+          "cardId": "OP06-017",
+          "qty": 3
+        },
+        {
+          "cardId": "OP08-036",
+          "qty": 1
+        },
+        {
+          "cardId": "ST21-017",
+          "qty": 2
+        },
+        {
+          "cardId": "ST31-005",
+          "qty": 4
+        }
+      ],
+      "name": "Luffy & Ace",
+      "player": "shirohige06",
+      "placing": 1,
+      "event": "Grand Line Cyprus - Season 2 Finals",
+      "eventDate": "2026-11-01T09:30:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6addff8d97e21d82e5c6ec84/player/shirohige06/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6addff8d97e21d82e5c6ec84:thunderb8",
+      "leaderId": "OP12-061",
+      "cards": [
+        {
+          "cardId": "OP16-064",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-108",
+          "qty": 3
+        },
+        {
+          "cardId": "OP16-067",
+          "qty": 1
+        },
+        {
+          "cardId": "ST10-010",
+          "qty": 4
+        },
+        {
+          "cardId": "P-088",
+          "qty": 4
+        },
+        {
+          "cardId": "P-093",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-068",
+          "qty": 1
+        },
+        {
+          "cardId": "EB04-058",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-038",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-114",
+          "qty": 2
+        },
+        {
+          "cardId": "OP16-065",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 4
+        },
+        {
+          "cardId": "OP13-076",
+          "qty": 2
+        },
+        {
+          "cardId": "OP12-115",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-077",
+          "qty": 2
+        },
+        {
+          "cardId": "OP16-078",
+          "qty": 3
+        }
+      ],
+      "name": "Donquixote Rosinante",
+      "player": "thunderb8",
+      "placing": 2,
+      "event": "Grand Line Cyprus - Season 2 Finals",
+      "eventDate": "2026-11-01T09:30:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6addff8d97e21d82e5c6ec84/player/thunderb8/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6addff8d97e21d82e5c6ec84:mavros",
+      "leaderId": "OP15-058",
+      "cards": [
+        {
+          "cardId": "OP12-071",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-061",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-067",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-066",
+          "qty": 1
+        },
+        {
+          "cardId": "OP15-071",
+          "qty": 4
+        },
+        {
+          "cardId": "ST10-010",
+          "qty": 4
+        },
+        {
+          "cardId": "OP10-067",
+          "qty": 3
+        },
+        {
+          "cardId": "OP15-118",
+          "qty": 3
+        },
+        {
+          "cardId": "OP15-075",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-076",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-077",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-074",
+          "qty": 3
+        },
+        {
+          "cardId": "OP13-076",
+          "qty": 1
+        },
+        {
+          "cardId": "OP05-077",
+          "qty": 2
+        },
+        {
+          "cardId": "OP09-077",
+          "qty": 1
+        }
+      ],
+      "name": "Enel",
+      "player": "Mavros",
+      "placing": 3,
+      "event": "Grand Line Cyprus - Season 2 Finals",
+      "eventDate": "2026-11-01T09:30:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6addff8d97e21d82e5c6ec84/player/mavros/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6addff8d97e21d82e5c6ec84:salamander23",
+      "leaderId": "OP17-079",
+      "cards": [
+        {
+          "cardId": "OP17-094",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-086",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-084",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-080",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-081",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-087",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-095",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-082",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-091",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-089",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-088",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-119",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-093",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-098",
+          "qty": 2
+        },
+        {
+          "cardId": "ST14-017",
+          "qty": 3
+        }
+      ],
+      "name": "Monkey.D.Luffy",
+      "player": "Salamander23",
+      "placing": 4,
+      "event": "Grand Line Cyprus - Season 2 Finals",
+      "eventDate": "2026-11-01T09:30:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6addff8d97e21d82e5c6ec84/player/salamander23/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6ae3584122fd412b92a4f50f:jordigiro03",
+      "leaderId": "OP05-098",
+      "cards": [
+        {
+          "cardId": "OP17-113",
+          "qty": 4
+        },
+        {
+          "cardId": "OP11-106",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-103",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-107",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-109",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-102",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-113",
+          "qty": 2
+        },
+        {
+          "cardId": "EB04-058",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-114",
+          "qty": 4
+        },
+        {
+          "cardId": "OP14-104",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-119",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-112",
+          "qty": 4
+        },
+        {
+          "cardId": "OP06-115",
+          "qty": 4
+        }
+      ],
+      "name": "Enel",
+      "player": "Jordigiro03",
+      "placing": 1,
+      "event": "Versus Cup",
+      "eventDate": "2026-10-29T20:00:00.000Z",
+      "players": 10,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6ae3584122fd412b92a4f50f/player/jordigiro03/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6ae3584122fd412b92a4f50f:jdaigo",
+      "leaderId": "OP16-080",
+      "cards": [
+        {
+          "cardId": "OP13-113",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-110",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-103",
+          "qty": 3
+        },
+        {
+          "cardId": "OP16-109",
+          "qty": 1
+        },
+        {
+          "cardId": "OP17-109",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-112",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-104",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-102",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-058",
+          "qty": 2
+        },
+        {
+          "cardId": "OP16-108",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-114",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-119",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-112",
+          "qty": 3
+        },
+        {
+          "cardId": "OP09-093",
+          "qty": 2
+        },
+        {
+          "cardId": "OP14-118",
+          "qty": 1
+        },
+        {
+          "cardId": "EB04-059",
+          "qty": 2
+        }
+      ],
+      "name": "Marshall.D.Teach",
+      "player": "JDaigo",
+      "placing": 2,
+      "event": "Versus Cup",
+      "eventDate": "2026-10-29T20:00:00.000Z",
+      "players": 10,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6ae3584122fd412b92a4f50f/player/jdaigo/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6adfa75822fd412b92a4d72a:raiguy425",
+      "leaderId": "OP13-004",
+      "cards": [
+        {
+          "cardId": "OP17-086",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-084",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-080",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-082",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-095",
+          "qty": 4
+        },
+        {
+          "cardId": "ST01-011",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-087",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-081",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-083",
+          "qty": 2
+        },
+        {
+          "cardId": "EB05-047",
+          "qty": 4
+        },
+        {
+          "cardId": "OP17-089",
+          "qty": 3
+        },
+        {
+          "cardId": "OP17-119",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-007",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-093",
+          "qty": 3
+        },
+        {
+          "cardId": "OP04-016",
+          "qty": 2
+        },
+        {
+          "cardId": "OP14-096",
+          "qty": 2
+        },
+        {
+          "cardId": "OP17-098",
+          "qty": 2
+        }
+      ],
+      "name": "Sabo",
+      "player": "raiguy425",
+      "placing": 1,
+      "event": "ONLINE EB05 SIM TOURNAMENT",
+      "eventDate": "2026-10-28T23:00:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6adfa75822fd412b92a4d72a/player/raiguy425/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6adfa75822fd412b92a4d72a:shuppen",
+      "leaderId": "OP12-061",
+      "cards": [
+        {
+          "cardId": "OP10-065",
+          "qty": 3
+        },
+        {
+          "cardId": "OP16-064",
+          "qty": 3
+        },
+        {
+          "cardId": "OP12-108",
+          "qty": 2
+        },
+        {
+          "cardId": "EB05-034",
+          "qty": 2
+        },
+        {
+          "cardId": "P-088",
+          "qty": 4
+        },
+        {
+          "cardId": "P-093",
+          "qty": 4
+        },
+        {
+          "cardId": "ST10-010",
+          "qty": 3
+        },
+        {
+          "cardId": "EB04-058",
+          "qty": 4
+        },
+        {
+          "cardId": "EB04-038",
+          "qty": 4
+        },
+        {
+          "cardId": "OP16-065",
+          "qty": 4
+        },
+        {
+          "cardId": "OP15-078",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-040",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-115",
+          "qty": 4
+        },
+        {
+          "cardId": "OP09-077",
+          "qty": 1
+        },
+        {
+          "cardId": "OP16-078",
+          "qty": 4
+        }
+      ],
+      "name": "Donquixote Rosinante",
+      "player": "Shuppen",
+      "placing": 2,
+      "event": "ONLINE EB05 SIM TOURNAMENT",
+      "eventDate": "2026-10-28T23:00:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6adfa75822fd412b92a4d72a/player/shuppen/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    },
+    {
+      "id": "6adfa75822fd412b92a4d72a:landothatg",
+      "leaderId": "OP12-001",
+      "cards": [
+        {
+          "cardId": "OP03-008",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-006",
+          "qty": 4
+        },
+        {
+          "cardId": "OP01-016",
+          "qty": 2
+        },
+        {
+          "cardId": "OP12-014",
+          "qty": 4
+        },
+        {
+          "cardId": "OP10-005",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-061",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-015",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-004",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-016",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-017",
+          "qty": 4
+        },
+        {
+          "cardId": "OP12-018",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-008",
+          "qty": 4
+        },
+        {
+          "cardId": "EB05-009",
+          "qty": 4
+        }
+      ],
+      "name": "Silvers Rayleigh",
+      "player": "LandothatG",
+      "placing": 4,
+      "event": "ONLINE EB05 SIM TOURNAMENT",
+      "eventDate": "2026-10-28T23:00:00.000Z",
+      "players": 16,
+      "source": "Limitless TCG",
+      "sourceType": "tournament",
+      "url": "https://play.limitlesstcg.com/tournament/6adfa75822fd412b92a4d72a/player/landothatg/decklist",
+      "format": "unknown",
+      "legality": "not-verified",
+      "collectedAt": "2026-11-27T12:02:46.065Z"
+    }
+  ]
 }
