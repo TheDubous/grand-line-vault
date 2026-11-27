@@ -1,0 +1,27 @@
+name: Refresh One Piece tournament decklists
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 5 * * 1,4"
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/sync-limitless-op.mjs
+      - name: Commit updated validated decklist sample
+        run: |
+          if git diff --quiet -- data/recommended-decks.json; then
+            echo "No new validated tournament data"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/recommended-decks.json
+          git commit -m "data: refresh validated One Piece tournament decklists"
+          git push
